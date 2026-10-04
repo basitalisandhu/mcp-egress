@@ -2,7 +2,7 @@
 
 Run a stdio MCP server behind a small recording proxy and get the exact set of hosts it contacts while you run `initialize`, `tools/list` and sample tool calls. Every host is attributed to the phase and the tool that reached it, written to `egress.json`, printed as a table, and printed again as two ready-to-paste blocks: Claude Code `WebFetch(domain:host)` permission rules and a sandbox allowed-domain list. Keep the file as a baseline and `--check` fails CI the day a tool starts talking to a host nobody declared.
 
-Part of [Hisar](https://github.com/basitalisandhu/hisar), open-source trust infrastructure for AI agents: who they are, what they may touch, and proof of what they did.
+Part of [Masoon](https://github.com/basitalisandhu/masoon), open-source trust infrastructure for AI agents: who they are, what they may touch, and proof of what they did.
 
 [![CI](https://github.com/basitalisandhu/mcp-egress/actions/workflows/ci.yml/badge.svg)](https://github.com/basitalisandhu/mcp-egress/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -252,8 +252,8 @@ Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and
 
 ## Sibling projects
 
-- [hisar](https://github.com/basitalisandhu/hisar): the platform front door, with the [docs site](https://basitalisandhu.github.io/hisar/).
-- [hisar-broker](https://basitalisandhu.github.io/hisar/hisar-broker.html): scoped, short-lived credentials for AI agents with approvals, kill switch and tamper-evident audit.
+- [masoon](https://github.com/basitalisandhu/masoon): the platform front door, with the [docs site](https://basitalisandhu.github.io/masoon/).
+- [Masoon Broker](https://basitalisandhu.github.io/masoon/masoon-broker.html): scoped, short-lived credentials for AI agents with approvals, kill switch and tamper-evident audit.
 - [mcp-tools-lint](https://github.com/basitalisandhu/mcp-tools-lint): lint the `tools/list` surface of an MCP server for schema dialect, annotation and naming problems.
 
 ## Licence
