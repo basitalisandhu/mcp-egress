@@ -38,3 +38,29 @@ jobs:
           mcp-egress --version
           mcp-egress run --out /tmp/egress.json -- python tests/fixtures/proxied_server.py
           python -c "import json; d=json.load(open('/tmp/egress.json')); assert d['server']['name']=='proxied-fixture'"
+
+  container-build:
+    name: Build the container image and run it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image, print --help and record the fixture server from a mount
+        run: |
+          docker build --build-arg VERSION=ci -t mcp-egress:ci .
+          docker run --rm mcp-egress:ci --help > help.txt && grep "^usage: mcp-egress" help.txt
+          docker run --rm mcp-egress:ci --version
+          test "$(docker run --rm --entrypoint id mcp-egress:ci -u)" = "1000"
+          # The container runs as uid 1000, so give it a writable work directory.
+          W="$RUNNER_TEMP/egress"
+          mkdir -p "$W" && chmod 777 "$W"
+          cp tests/fixtures/proxied_server.py "$W/"
+          echo '[{"tool":"echo","arguments":{"text":"no network"}}]' > "$W/quiet.json"
+          echo '[{"tool":"fetch","arguments":{"url":"http://127.0.0.1:9/"}}]' > "$W/new.json"
+          docker run --rm -v "$W:/work" mcp-egress:ci run --calls quiet.json --baseline baseline.json --out egress.json -- python proxied_server.py
+          docker run --rm -v "$W:/work" mcp-egress:ci run --calls quiet.json --baseline baseline.json --check --out egress.json -- python proxied_server.py
+          python3 -c "import json; d=json.load(open('$W/egress.json')); assert d['server']['name']=='proxied-fixture'"
+          set +e
+          docker run --rm -v "$W:/work" mcp-egress:ci run --calls new.json --baseline baseline.json --check --out egress.json -- python proxied_server.py
+          test $? -eq 1
