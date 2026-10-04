@@ -1,0 +1,4 @@
+[
+  {"tool": "fetch", "arguments": {"url": "https://example.com/"}},
+  {"tool": "echo", "arguments": {"text": "no network"}}
+]

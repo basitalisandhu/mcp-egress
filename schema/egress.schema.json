@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/basitalisandhu/mcp-egress/schema/egress.schema.json",
+  "title": "mcp-egress run document",
+  "description": "The document mcp-egress writes to --out and reads back as a --baseline.",
+  "type": "object",
+  "required": ["format_version", "generator", "command", "started", "finished", "proxy", "server", "hosts", "tools", "calls", "warnings", "check"],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {"type": "integer", "const": 1},
+    "generator": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {"name": {"const": "mcp-egress"}, "version": {"type": "string"}}
+    },
+    "command": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "started": {"$ref": "#/$defs/timestamp"},
+    "finished": {"$ref": "#/$defs/timestamp"},
+    "proxy": {"type": "string", "pattern": "^http://127\\.0\\.0\\.1:[0-9]+$"},
+    "server": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["name", "version", "protocol_version"],
+          "properties": {
+            "name": {"type": "string"},
+            "version": {"type": "string"},
+            "protocol_version": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "hosts": {"type": "array", "items": {"$ref": "#/$defs/host"}},
+    "tools": {"type": "array", "items": {"$ref": "#/$defs/tool"}},
+    "calls": {"type": "array", "items": {"$ref": "#/$defs/call"}},
+    "warnings": {"type": "array", "items": {"$ref": "#/$defs/warning"}},
+    "check": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["baseline", "ok", "new_hosts", "missing_hosts"],
+          "properties": {
+            "baseline": {"type": "string"},
+            "ok": {"type": "boolean"},
+            "new_hosts": {"type": "array", "items": {"$ref": "#/$defs/hostKey"}},
+            "missing_hosts": {"type": "array", "items": {"$ref": "#/$defs/hostKey"}}
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "hostKey": {"type": "string", "pattern": "^.+:[0-9]+$"},
+    "phase": {"enum": ["startup", "list", "call", "shutdown"]},
+    "host": {
+      "type": "object",
+      "required": ["host", "port", "scheme", "phase", "tool", "first_seen", "bytes_out", "bytes_in", "connections", "phases", "tools"],
+      "additionalProperties": false,
+      "properties": {
+        "host": {"type": "string", "minLength": 1},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "scheme": {"enum": ["http", "https"]},
+        "phase": {"$ref": "#/$defs/phase"},
+        "tool": {"type": ["string", "null"]},
+        "first_seen": {"$ref": "#/$defs/timestamp"},
+        "bytes_out": {"type": "integer", "minimum": 0},
+        "bytes_in": {"type": "integer", "minimum": 0},
+        "connections": {"type": "integer", "minimum": 1},
+        "phases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/phase"}},
+        "tools": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "tool": {
+      "type": "object",
+      "required": ["name", "title", "description", "annotations", "hosts"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "title": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
+        "annotations": {"type": ["object", "null"]},
+        "hosts": {"type": "array", "items": {"$ref": "#/$defs/hostKey"}}
+      }
+    },
+    "call": {
+      "type": "object",
+      "required": ["tool", "arguments", "ok", "is_error", "error", "hosts", "network_evidence", "duration_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {"type": "string", "minLength": 1},
+        "arguments": {"type": "object"},
+        "ok": {"type": "boolean"},
+        "is_error": {"type": "boolean"},
+        "error": {"type": ["string", "null"]},
+        "hosts": {"type": "array", "items": {"$ref": "#/$defs/hostKey"}},
+        "network_evidence": {"type": ["string", "null"]},
+        "duration_ms": {"type": "integer", "minimum": 0}
+      }
+    },
+    "warning": {
+      "type": "object",
+      "required": ["code", "tool", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {"enum": ["possible-proxy-bypass", "open-world-hint-false", "outside-declared-base-url"]},
+        "tool": {"type": ["string", "null"]},
+        "message": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
