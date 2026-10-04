@@ -41,19 +41,19 @@ Once the package is on PyPI the short forms work too: `pipx install mcp-egress`,
 Each release tag publishes `ghcr.io/basitalisandhu/mcp-egress` for linux/amd64 and linux/arm64, tagged with the version and `latest`. The image runs as uid 1000 with `/work` as the working directory:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/mcp-egress:0.1.0 \
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/mcp-egress:0.1.1 \
   run --calls calls.json --baseline egress.baseline.json --check --out egress.json -- python server.py
 ```
 
-`mcp-egress run` starts the MCP server inside the container, so the server command has to work there. The image contains Python 3.12 and the `mcp` package and nothing else: a Python server in the mounted directory that needs only `mcp` and the standard library runs as is. Servers started with `npx`, `uvx` or another runtime need an image of your own that adds that runtime (`FROM ghcr.io/basitalisandhu/mcp-egress:0.1.0`), or a local install of mcp-egress. The baseline, `--check` and the `egress.json` document behave the same in the container; the mounted directory must be writable by uid 1000.
+`mcp-egress run` starts the MCP server inside the container, so the server command has to work there. The image contains Python 3.12 and the `mcp` package and nothing else: a Python server in the mounted directory that needs only `mcp` and the standard library runs as is. Servers started with `npx`, `uvx` or another runtime need an image of your own that adds that runtime (`FROM ghcr.io/basitalisandhu/mcp-egress:0.1.1`), or a local install of mcp-egress. The baseline, `--check` and the `egress.json` document behave the same in the container; the mounted directory must be writable by uid 1000.
 
 The image is signed with a keyless cosign signature and has a build provenance attestation and an SPDX SBOM (attached to the GitHub Release). To verify:
 
 ```bash
-cosign verify ghcr.io/basitalisandhu/mcp-egress:0.1.0 \
+cosign verify ghcr.io/basitalisandhu/mcp-egress:0.1.1 \
   --certificate-identity-regexp '^https://github.com/basitalisandhu/mcp-egress/\.github/workflows/publish-github-packages\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
-gh attestation verify oci://ghcr.io/basitalisandhu/mcp-egress:0.1.0 --repo basitalisandhu/mcp-egress
+gh attestation verify oci://ghcr.io/basitalisandhu/mcp-egress:0.1.1 --repo basitalisandhu/mcp-egress
 ```
 
 ### pip
@@ -113,7 +113,7 @@ The run below is real output against the test fixture in [`tests/fixtures/proxie
 ```text
 $ mcp-egress run --calls calls.json --baseline baseline.json -- python fixtures/proxied_server.py
 mcp-egress: python fixtures/proxied_server.py
-server: proxied-fixture 0.1.0 (protocol 2025-11-25), 6 tool(s), 4 call(s), 2 host(s)
+server: proxied-fixture 0.1.1 (protocol 2025-11-25), 6 tool(s), 4 call(s), 2 host(s)
 
 HOST       PORT   SCHEME  FIRST SEEN   TOOLS        CONNS  OUT    IN
 127.0.0.1  39211  http    call:fetch   fetch, ping  2      243 B  278 B
@@ -150,7 +150,7 @@ Exit code 1. The second fixture, [`tests/fixtures/socket_server.py`](tests/fixtu
 ```text
 $ mcp-egress run --calls calls.json --out socket.json -- python fixtures/socket_server.py
 mcp-egress: python fixtures/socket_server.py
-server: socket-fixture 0.1.0 (protocol 2025-11-25), 2 tool(s), 4 call(s), 0 host(s)
+server: socket-fixture 0.1.1 (protocol 2025-11-25), 2 tool(s), 4 call(s), 0 host(s)
 
 No proxied connections were seen.
 
