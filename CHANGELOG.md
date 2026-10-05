@@ -6,11 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.1] - 2026-10-06
+
 ### Fixed
 
 - `schema/egress.schema.json`: `addresses` on a host is optional again (the `required` list is as before the addresses change), so recordings written before it was added still validate under `format_version` 1. Files written by 0.1.1 and later carry `addresses`.
-
-## [0.1.1] - 2026-10-06
 
 ### Changed
 
