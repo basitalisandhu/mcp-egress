@@ -198,7 +198,7 @@ The document is the baseline format and the input for your own scripts. Its JSON
 | `format_version`, `generator` | `1`, and the tool name and version that wrote the file. |
 | `command`, `started`, `finished`, `proxy` | The server command, UTC timestamps, and the proxy URL the server was given. |
 | `server` | `name`, `version` and negotiated `protocol_version` from `initialize`, or `null`. |
-| `hosts` | One entry per host, port and scheme: `host`, `port`, `scheme`, `phase` and `tool` of the first connection, `first_seen`, `bytes_out`, `bytes_in`, `connections`, and the `phases` and `tools` that reached it. |
+| `hosts` | One entry per host, port and scheme: `host`, `port`, `scheme`, `phase` and `tool` of the first connection, `first_seen`, `bytes_out`, `bytes_in`, `connections`, the `phases` and `tools` that reached it, and `addresses`: distinct connected IP strings in first-seen order (empty when no connection succeeded). Addresses are observations, not a baseline check; `--check` compares only `host:port`. |
 | `tools` | Every tool from `tools/list` with `name`, `title`, `description`, `annotations` (as the server sent them) and the `host:port` list it reached. |
 | `calls` | One entry per `--calls` entry: `tool`, `arguments`, `ok`, `is_error`, `error`, `hosts`, `network_evidence` (the fragment that looked like network output, if any) and `duration_ms`. |
 | `warnings` | `{code, tool, message}` entries, the same ones printed. |

@@ -50,6 +50,14 @@ def test_document_host_keys_dedupes_and_lowercases():
         document_host_keys({"hosts": [{"host": "x"}]})
 
 
+def test_address_changes_do_not_change_baseline_comparison():
+    current = _doc("api.example:443")
+    baseline = _doc("api.example:443")
+    current["hosts"][0]["addresses"] = ["127.0.0.2"]
+    baseline["hosts"][0]["addresses"] = ["127.0.0.1"]
+    assert compare(current, baseline, "b.json").ok
+
+
 def test_load_baseline_errors(tmp_path):
     with pytest.raises(BaselineError, match="does not exist"):
         load_baseline(tmp_path / "missing.json")
