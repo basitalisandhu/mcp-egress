@@ -57,7 +57,7 @@
     "phase": {"enum": ["startup", "list", "call", "shutdown"]},
     "host": {
       "type": "object",
-      "required": ["host", "port", "scheme", "phase", "tool", "first_seen", "bytes_out", "bytes_in", "connections", "phases", "tools", "addresses"],
+      "required": ["host", "port", "scheme", "phase", "tool", "first_seen", "bytes_out", "bytes_in", "connections", "phases", "tools"],
       "additionalProperties": false,
       "properties": {
         "host": {"type": "string", "minLength": 1},
