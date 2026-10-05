@@ -54,6 +54,7 @@ def test_connect_tunnels_bytes_and_records_the_host(http_server):
     assert (conn.host, conn.port, conn.scheme) == ("127.0.0.1", http_server.port, "https")
     assert (conn.phase, conn.tool) == (PHASE_CALL, "fetch")
     assert conn.connected and conn.bytes_out > 0 and conn.bytes_in > 0
+    assert recorder.hosts()[0].to_dict()["addresses"] == ["127.0.0.1"]
 
 
 def test_absolute_form_request_is_forwarded_and_recorded_as_http(http_server):
@@ -80,6 +81,7 @@ def test_absolute_form_request_is_forwarded_and_recorded_as_http(http_server):
         None,
     )
     assert conn.bytes_in == len(data)
+    assert recorder.hosts()[0].to_dict()["addresses"] == ["127.0.0.1"]
 
 
 def test_origin_form_and_garbage_get_400_and_are_not_recorded():
@@ -108,6 +110,7 @@ def test_unreachable_upstream_gets_502_but_the_attempt_is_recorded():
     assert len(recorder.connections) == 1
     assert recorder.connections[0].connected is False
     assert recorder.connections[0].key == "127.0.0.1:1"
+    assert recorder.hosts()[0].to_dict()["addresses"] == []
 
 
 def test_proxy_listens_on_loopback_only_with_an_ephemeral_port():
@@ -139,6 +142,7 @@ def test_hosts_aggregate_per_host_port_and_scheme(http_server):
     assert len(hosts) == 1
     rec = hosts[0]
     assert rec.connections == 3
+    assert rec.to_dict()["addresses"] == ["127.0.0.1"]
     assert rec.phase == PHASE_LIST and rec.tool is None
     assert rec.phases == [PHASE_LIST, PHASE_CALL]
     assert rec.tools == ["search", "fetch"]
@@ -178,3 +182,14 @@ def test_parse_absolute_target_and_head():
     assert headers == [("Host", "h"), ("X", "y")]
     with pytest.raises(ProxyError):
         parse_head(b"GET /\r\n\r\n")
+
+
+def test_host_addresses_are_distinct_in_connection_order():
+    recorder = Recorder()
+    for address in ["127.0.0.2", "::1", "127.0.0.2"]:
+        conn = recorder.open("example.test", 443, "https")
+        conn.connected = True
+        conn.address = address
+    failed = recorder.open("example.test", 443, "https")
+    failed.address = "127.0.0.3"
+    assert recorder.hosts()[0].to_dict()["addresses"] == ["127.0.0.2", "::1"]

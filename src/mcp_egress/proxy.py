@@ -222,6 +222,9 @@ class RecordingProxy:
             await _reply(writer, 502, "Bad Gateway", f"cannot reach {conn.key}: {exc}")
             return None
         conn.connected = True
+        peer = up_writer.get_extra_info("peername")
+        if isinstance(peer, tuple) and peer and isinstance(peer[0], str):
+            conn.address = peer[0]
         return up_reader, up_writer
 
     async def _pump_both(

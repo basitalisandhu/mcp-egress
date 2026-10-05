@@ -37,6 +37,7 @@ class Connection:
     bytes_out: int = 0
     bytes_in: int = 0
     connected: bool = False
+    address: str | None = None
 
     @property
     def key(self) -> str:
@@ -58,6 +59,7 @@ class HostRecord:
     connections: int = 0
     phases: list[str] = field(default_factory=list)
     tools: list[str] = field(default_factory=list)
+    addresses: list[str] = field(default_factory=list)
 
     @property
     def key(self) -> str:
@@ -76,6 +78,7 @@ class HostRecord:
             "connections": self.connections,
             "phases": list(self.phases),
             "tools": list(self.tools),
+            "addresses": list(self.addresses),
         }
 
 
@@ -127,6 +130,8 @@ class Recorder:
             rec.connections += 1
             rec.bytes_out += conn.bytes_out
             rec.bytes_in += conn.bytes_in
+            if conn.connected and conn.address and conn.address not in rec.addresses:
+                rec.addresses.append(conn.address)
             if conn.phase not in rec.phases:
                 rec.phases.append(conn.phase)
             if conn.tool and conn.tool not in rec.tools:
