@@ -8,6 +8,8 @@
 
 ## Reporting a vulnerability
 
+Report a vulnerability privately: <https://github.com/basitalisandhu/mcp-egress/security/advisories/new>
+
 Please use GitHub's private vulnerability reporting on this repository (Security tab, "Report a vulnerability") rather than a public issue. Include the version, the server command you ran (with secrets removed), the `egress.json` if it helps, and what you expected to happen.
 
 You will get an acknowledgement within 7 days and a fix or a mitigation plan within 30 days for confirmed issues. Credit is given in the release notes unless you prefer otherwise.
