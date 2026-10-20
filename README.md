@@ -111,6 +111,7 @@ Options go before `--`; everything after `--` is the server command, exactly as 
 |---|---|
 | `--calls FILE` | JSON file of calls to make after `tools/list`: a list of `{"tool": name, "arguments": {...}}`, or an object with a `calls` list. Without it only `initialize` and `tools/list` run. |
 | `--out FILE` | Where to write the run document. Default `egress.json`. |
+| `--report-out FILE` | Also save stdout verbatim as UTF-8 in the selected format, including the check section even on exit 1. Text includes status lines; Markdown keeps them on stderr. Must differ from run JSON, baseline, calls and stderr-log paths. A write error exits 2; missing parent directories are not created. |
 | `--baseline FILE` | Without `--check`: also save this run as the baseline. With `--check`: the baseline to compare against (never modified). |
 | `--check` | Exit 1 when a `host:port` seen in this run is not in the baseline. Hosts in the baseline that were not seen are reported, not failed. |
 | `--timeout SECONDS` | Per-request timeout for `initialize`, `tools/list` and each call. Default 30. A call that times out is recorded as failed; the run continues. |

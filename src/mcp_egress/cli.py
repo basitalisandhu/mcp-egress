@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from io import StringIO
 from pathlib import Path
+from typing import TextIO
 
 from . import __version__
 from .analysis import warnings_for
@@ -25,6 +27,27 @@ EXIT_USAGE = 2
 EXIT_SERVER = 3
 
 DEFAULT_OUT = "egress.json"
+
+
+class _ReportTee:
+    """Mirror only CLI stdout without changing its timing or stderr routing."""
+
+    def __init__(self, stream: TextIO) -> None:
+        self.stream = stream
+        self.buffer = StringIO()
+
+    def write(self, text: str) -> int:
+        self.stream.write(text)
+        return self.buffer.write(text)
+
+    def flush(self) -> None:
+        self.stream.flush()
+
+
+def _same_file(left: Path, right: Path) -> bool:
+    return left.resolve() == right.resolve() or (
+        left.exists() and right.exists() and left.samefile(right)
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -77,6 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="write the server's stderr to FILE instead of passing it through",
     )
+    run.add_argument(
+        "--report-out",
+        metavar="FILE",
+        help="also save stdout's selected text/markdown report as UTF-8",
+    )
     run.add_argument("command", nargs=argparse.REMAINDER, help="the server command")
     return parser
 
@@ -106,7 +134,19 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_command(ns: argparse.Namespace, command: list[str]) -> int:
-    out = sys.stdout
+    report = _ReportTee(sys.stdout) if ns.report_out else None
+    out = report if report is not None else sys.stdout
+    if ns.report_out:
+        try:
+            protected = [ns.out or DEFAULT_OUT, ns.baseline, ns.calls, ns.server_stderr]
+            if any(_same_file(Path(ns.report_out), Path(p)) for p in protected if p):
+                print(
+                    "error: --report-out must not overwrite a run/input/log file", file=sys.stderr
+                )
+                return EXIT_USAGE
+        except OSError as exc:
+            print(f"error: cannot resolve --report-out: {exc}", file=sys.stderr)
+            return EXIT_USAGE
     try:
         calls = load_calls(ns.calls) if ns.calls else []
     except (OSError, ValueError) as exc:
@@ -168,6 +208,12 @@ def run_command(ns: argparse.Namespace, command: list[str]) -> int:
         if baseline_path.resolve() != out_path.resolve() or skip_out:
             write_document(doc, baseline_path)
         print(f"Baseline saved to {baseline_path}", file=out)
+    if report is not None:
+        try:
+            Path(ns.report_out).write_text(report.buffer.getvalue(), encoding="utf-8", newline="")
+        except OSError as exc:
+            print(f"error: cannot write --report-out: {exc}", file=sys.stderr)
+            return EXIT_USAGE
     return status
 
 
