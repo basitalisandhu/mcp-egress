@@ -22,6 +22,10 @@ def load_baseline(path: Path) -> dict:
         raise BaselineError(f"cannot read baseline {path}: {exc}") from None
     if not isinstance(data, dict) or not isinstance(data.get("hosts"), list):
         raise BaselineError(f"baseline {path} has no 'hosts' list")
+    try:
+        document_host_keys(data)
+    except BaselineError as exc:
+        raise BaselineError(f"baseline {path}: {exc}") from None
     return data
 
 
@@ -31,7 +35,14 @@ def document_host_keys(doc: dict) -> list[str]:
     for entry in doc.get("hosts", []):
         if not isinstance(entry, dict) or "host" not in entry or "port" not in entry:
             raise BaselineError("a hosts entry lacks host or port")
-        key = host_key(str(entry["host"]).lower(), int(entry["port"]))
+        port = entry["port"]
+        if isinstance(port, bool) or not isinstance(port, int | str):
+            raise BaselineError(f"a hosts entry has a bad port {port!r}")
+        try:
+            port = int(port)
+        except ValueError:
+            raise BaselineError(f"a hosts entry has a bad port {port!r}") from None
+        key = host_key(str(entry["host"]).lower(), port)
         if key not in keys:
             keys.append(key)
     return keys

@@ -85,3 +85,20 @@ def test_tools_reaching_names_the_tools_for_a_host():
     )
     assert tools_reaching(doc, "a.example:443") == ["fetch", "search"]
     assert tools_reaching(doc, "zzz:1") == []
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [{"host": "a.example", "port": "https"}, {"host": "a.example", "port": None}, {"port": 443}],
+)
+def test_load_baseline_rejects_bad_host_entries_up_front(tmp_path, entry):
+    path = tmp_path / "b.json"
+    path.write_text(json.dumps({"hosts": [entry]}))
+    with pytest.raises(BaselineError, match=r"b\.json"):
+        load_baseline(path)
+
+
+def test_load_baseline_accepts_a_port_written_as_a_string(tmp_path):
+    path = tmp_path / "b.json"
+    path.write_text(json.dumps({"hosts": [{"host": "a.example", "port": "443"}]}))
+    assert document_host_keys(load_baseline(path)) == ["a.example:443"]

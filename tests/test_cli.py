@@ -188,3 +188,13 @@ def test_module_and_console_entry_points(tmp_path):
             [str(script), "run", "--help"], capture_output=True, text=True, check=True
         )
         assert "--baseline" in result.stdout and "--check" in result.stdout
+
+
+def test_malformed_baseline_entry_exits_2_before_the_server_starts(tmp_path, capsys):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps({"hosts": [{"host": "api.example", "port": "https"}]}))
+    marker = tmp_path / "started"
+    server = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    assert _run(tmp_path, server, "--check", "--baseline", str(baseline)) == EXIT_USAGE
+    assert "bad port" in capsys.readouterr().err
+    assert not marker.exists()

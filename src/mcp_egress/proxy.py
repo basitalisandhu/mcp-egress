@@ -68,7 +68,10 @@ def parse_absolute_target(target: str) -> tuple[str, int, str]:
     parts = urlsplit(target)
     if parts.scheme.lower() != "http" or not parts.hostname:
         raise ProxyError(f"unsupported request target {target!r}")
-    port = parts.port or 80
+    try:
+        port = parts.port or 80
+    except ValueError:
+        raise ProxyError(f"bad port in request target {target!r}") from None
     path = parts.path or "/"
     if parts.query:
         path = f"{path}?{parts.query}"

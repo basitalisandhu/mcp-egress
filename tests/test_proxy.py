@@ -90,11 +90,13 @@ def test_origin_form_and_garbage_get_400_and_are_not_recorded():
         async with RecordingProxy(recorder) as proxy:
             a = await _exchange(proxy.port, b"GET /relative HTTP/1.1\r\nHost: x\r\n\r\n")
             b = await _exchange(proxy.port, b"not http at all\r\n\r\n")
-            return recorder, a, b
+            c = await _exchange(proxy.port, b"GET http://example.com:99999/ HTTP/1.1\r\n\r\n")
+            return recorder, a, b, c
 
-    recorder, a, b = asyncio.run(go())
+    recorder, a, b, c = asyncio.run(go())
     assert a.startswith(b"HTTP/1.1 400")
     assert b.startswith(b"HTTP/1.1 400")
+    assert c.startswith(b"HTTP/1.1 400") and b"bad port" in c
     assert recorder.connections == []
 
 
@@ -193,3 +195,27 @@ def test_host_addresses_are_distinct_in_connection_order():
     failed = recorder.open("example.test", 443, "https")
     failed.address = "127.0.0.3"
     assert recorder.hosts()[0].to_dict()["addresses"] == ["127.0.0.2", "::1"]
+
+
+def test_bound_address_needs_a_running_proxy_and_close_is_idempotent():
+    proxy = RecordingProxy(Recorder())
+    with pytest.raises(RuntimeError, match="not running"):
+        _ = proxy.bound_address
+    asyncio.run(proxy.close())
+
+
+def test_client_that_closes_before_the_head_ends_is_dropped_quietly():
+    async def go():
+        recorder = Recorder()
+        async with RecordingProxy(recorder) as proxy:
+            reader, writer = await asyncio.open_connection("127.0.0.1", proxy.port)
+            writer.write(b"CONNECT example.com:443 HTTP/1.1\r\n")
+            writer.write_eof()
+            data = await asyncio.wait_for(reader.read(-1), 5)
+            writer.close()
+            await writer.wait_closed()
+            return recorder, data
+
+    recorder, data = asyncio.run(go())
+    assert data == b""
+    assert recorder.connections == []
