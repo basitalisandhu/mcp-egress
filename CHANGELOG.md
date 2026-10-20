@@ -6,7 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `hidden-characters` warning: a tool whose `name`, `title` or `description` contains invisible or bidi-control characters (Unicode format characters such as zero-width spaces, bidi overrides and isolates, the byte order mark and tag characters, plus the variation selectors supplement) is flagged, with each code point named and any tag-character text decoded. It runs on the `tools/list` result, so it needs no calls and no network. The schema's warning `code` enum gains the value. Suggested by @rezearcher in #19.
 
 ## [0.1.1] - 2026-10-06
 

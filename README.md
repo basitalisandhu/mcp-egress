@@ -187,6 +187,7 @@ The second block is the same hosts as a JSON array, for a sandbox allowed-domain
 |---|---|
 | `open-world-hint-false` | A tool annotated `openWorldHint: false` reached a host. Annotations are the server's own claims; this one was false. |
 | `outside-declared-base-url` | The server command line contains a URL (for example `--base-url https://api.example.com`), and a tool reached a host other than the ones declared there. Only printed when the command line declares at least one URL. |
+| `hidden-characters` | A tool's `name`, `title` or `description` from `tools/list` contains characters that render as nothing: zero-width spaces and joiners, bidi embeddings, overrides and isolates, the byte order mark, the soft hyphen, variation selectors from the supplement block, or Unicode tag characters (U+E0000 to U+E007F). The message names each code point and, for tag characters, quotes the ASCII text they spell out, because that is how instructions are hidden from a human reviewer. Checked for every listed tool, called or not, and needs no network. Parameter descriptions inside `inputSchema` are not checked yet. |
 | `possible-proxy-bypass` | A tool call succeeded and its result contains an `http://` or `https://` URL, a status line such as `200 OK` or `HTTP/1.1 404 Not Found`, or a status field such as `status: 503`, while no proxied connection was seen during that call. The server probably reached the network without honouring the proxy variables. See the limits below. |
 
 ## The egress.json document

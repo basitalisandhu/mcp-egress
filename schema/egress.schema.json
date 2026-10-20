@@ -106,7 +106,7 @@
       "required": ["code", "tool", "message"],
       "additionalProperties": false,
       "properties": {
-        "code": {"enum": ["possible-proxy-bypass", "open-world-hint-false", "outside-declared-base-url"]},
+        "code": {"enum": ["possible-proxy-bypass", "open-world-hint-false", "outside-declared-base-url", "hidden-characters"]},
         "tool": {"type": ["string", "null"]},
         "message": {"type": "string", "minLength": 1}
       }

@@ -61,3 +61,16 @@ def test_addresses_must_still_be_a_list_of_distinct_strings():
         except jsonschema.ValidationError:
             continue
         raise AssertionError(f"addresses={bad!r} should not validate")
+
+
+def test_hidden_characters_warning_validates():
+    doc = _doc(HOST)
+    doc["warnings"] = [
+        {
+            "code": "hidden-characters",
+            "tool": "lookup",
+            "message": "description contains 1 invisible or bidi-control character(s): "
+            "U+200B ZERO WIDTH SPACE",
+        }
+    ]
+    jsonschema.validate(doc, SCHEMA)
