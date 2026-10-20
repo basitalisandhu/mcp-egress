@@ -1,10 +1,45 @@
 # mcp-egress: record every host an MCP server contacts, per tool
 
-Run a stdio MCP server behind a small recording proxy and get the exact set of hosts it contacts while you run `initialize`, `tools/list` and sample tool calls. Every host is attributed to the phase and the tool that reached it, written to `egress.json`, printed as a table, and printed again as two ready-to-paste blocks: Claude Code `WebFetch(domain:host)` permission rules and a sandbox allowed-domain list. Keep the file as a baseline and `--check` fails CI the day a tool starts talking to a host nobody declared.
+**What:** run a stdio MCP server behind a small recording proxy and get the exact set of hosts it contacts while you run `initialize`, `tools/list` and sample tool calls. Every host is attributed to the phase and the tool that reached it, written to `egress.json`, printed as a table, and printed again as two ready-to-paste blocks: Claude Code `WebFetch(domain:host)` permission rules and a sandbox allowed-domain list. Keep the file as a baseline and `--check` fails CI the day a tool starts talking to a host nobody declared.
 
 [![CI](https://github.com/basitalisandhu/mcp-egress/actions/workflows/ci.yml/badge.svg)](https://github.com/basitalisandhu/mcp-egress/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+
+**Who it is for:** anyone who installs third-party MCP servers or maintains one, and wants a reviewed list of outbound hosts instead of trusting the README; security reviewers who need the allowlist for a Claude Code sandbox.
+
+### Quick start
+
+```bash
+pipx install git+https://github.com/basitalisandhu/mcp-egress
+mcp-egress run --calls calls.json --baseline egress.baseline.json -- uvx some-mcp-server   # record once
+mcp-egress run --calls calls.json --baseline egress.baseline.json --check -- uvx some-mcp-server   # in CI
+```
+
+A real run against the test fixture in this repository (a local web server on port 39211 stands in for an API):
+
+```text
+$ mcp-egress run --calls calls.json -- python fixtures/proxied_server.py
+mcp-egress: python fixtures/proxied_server.py
+server: proxied-fixture 0.1.0 (protocol 2025-11-25), 6 tool(s), 3 call(s), 1 host(s)
+
+HOST       PORT   SCHEME  FIRST SEEN  TOOLS        CONNS  OUT    IN
+127.0.0.1  39211  http    call:fetch  fetch, ping  2      248 B  406 B
+
+Claude Code permission rules (settings.json, permissions.allow):
+"WebFetch(domain:127.0.0.1)",
+
+Sandbox allowed domains (settings.json, sandbox.network.allowedDomains):
+[
+  "127.0.0.1"
+]
+
+Warnings:
+  open-world-hint-false      ping: declares openWorldHint false but reached 127.0.0.1:39211
+Wrote egress.json
+```
+
+Project site: https://basitalisandhu.github.io/mcp-egress/. Related: [mcp-tools-lint](https://github.com/basitalisandhu/mcp-tools-lint) checks the same server's `tools/list` schemas and annotations.
 
 ## Why
 
@@ -79,6 +114,7 @@ Options go before `--`; everything after `--` is the server command, exactly as 
 | `--baseline FILE` | Without `--check`: also save this run as the baseline. With `--check`: the baseline to compare against (never modified). |
 | `--check` | Exit 1 when a `host:port` seen in this run is not in the baseline. Hosts in the baseline that were not seen are reported, not failed. |
 | `--timeout SECONDS` | Per-request timeout for `initialize`, `tools/list` and each call. Default 30. A call that times out is recorded as failed; the run continues. |
+| `--format text\|markdown` | Report format on stdout. Default `text`. `markdown` prints the same content as GitHub-flavoured Markdown (see below) and moves the `Wrote ...` status lines to stderr, so stdout can be redirected straight into a pull request comment or `$GITHUB_STEP_SUMMARY`. |
 | `--server-stderr FILE` | Write the server's stderr to a file instead of passing it through. |
 
 Exit codes: `0` ok, `1` new hosts with `--check`, `2` usage error (bad options, unreadable calls file, missing baseline), `3` the server could not be started or did not get through `initialize` and `tools/list`.
@@ -233,6 +269,36 @@ jobs:
           path: egress.json
 ```
 
+To show the result on the run page or in a pull request comment, add `--format markdown` and send stdout to the step summary. The exit code is the same, so the job still fails on a new host:
+
+```yaml
+      - run: mcp-egress run --format markdown --calls calls.json --baseline egress.baseline.json --check --out egress.json -- uvx some-mcp-server >> "$GITHUB_STEP_SUMMARY"
+```
+
+A real Markdown report, from the fixture run above checked against a baseline that only lists `api.example.com:443` (exit code 1):
+
+````markdown
+## mcp-egress report
+
+Command: `python fixtures/proxied_server.py`
+
+Server: proxied-fixture 0.1.0 (protocol 2025-11-25), 6 tool(s), 3 call(s), 1 host(s)
+
+### Hosts
+
+| host | port | scheme | first seen | tools | connections | bytes out | bytes in |
+|---|---:|---|---|---|---:|---:|---:|
+| 127.0.0.1 | 39211 | http | call:fetch | fetch, ping | 2 | 248 B | 406 B |
+
+...
+
+### Baseline check
+
+Baseline `old.json`: 1 new host(s):
+
+- `127.0.0.1:39211` (tools: fetch, ping)
+````
+
 When a tool legitimately needs a new host, re-run without `--check` and commit the new baseline in the same pull request as the change that needed it, so the review sees the host and the reason together.
 
 ## The proxy-bypass warning and its limits
@@ -269,7 +335,6 @@ No. HTTPS goes through the proxy as a `CONNECT` tunnel, and the proxy copies byt
 
 - Linux network-namespace mode that captures every connection, proxy support or not.
 - Remote servers over Streamable HTTP, with the proxy variables applied to the client side as well.
-- Resolved IP addresses next to each host, and a Markdown report for pull request comments.
 - Automatic calls for tools with no required arguments, so a baseline needs less hand-written input.
 - A composite GitHub Action wrapping the check.
 

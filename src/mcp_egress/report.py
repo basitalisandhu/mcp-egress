@@ -101,13 +101,16 @@ def render_sandbox_domains(doc: dict) -> str:
     return json.dumps(names, indent=2)
 
 
+def _warning_text(w: dict) -> str:
+    """The tool prefix and message of one warning, shared by both renderers."""
+    who = f"{w['tool']}: " if w["tool"] else ""
+    return f"{who}{w['message']}"
+
+
 def render_warnings(doc: dict) -> str:
     if not doc["warnings"]:
         return "No warnings."
-    lines = []
-    for w in doc["warnings"]:
-        who = f"{w['tool']}: " if w["tool"] else ""
-        lines.append(f"  {w['code']:<26} {who}{w['message']}")
+    lines = [f"  {w['code']:<26} {_warning_text(w)}" for w in doc["warnings"]]
     return "Warnings:\n" + "\n".join(lines)
 
 
@@ -119,10 +122,13 @@ def render_check(doc: dict, comparison: Comparison) -> str:
         return f"Baseline {comparison.baseline}: no new hosts{extra}."
     lines = [f"Baseline {comparison.baseline}: {len(comparison.new_hosts)} new host(s):"]
     for key in comparison.new_hosts:
-        tools = tools_reaching(doc, key)
-        suffix = f"  (tools: {', '.join(tools)})" if tools else "  (no tool, seen while listing)"
-        lines.append(f"  {key}{suffix}")
+        lines.append(f"  {key}  {_new_host_note(doc, key)}")
     return "\n".join(lines)
+
+
+def _new_host_note(doc: dict, key: str) -> str:
+    tools = tools_reaching(doc, key)
+    return f"(tools: {', '.join(tools)})" if tools else "(no tool, seen while listing)"
 
 
 def render_report(doc: dict) -> str:
@@ -152,3 +158,99 @@ def render_report(doc: dict) -> str:
         render_warnings(doc),
     ]
     return "\n".join(parts)
+
+
+def _md_cell(text: str) -> str:
+    """A table cell: pipes escaped, line breaks flattened."""
+    return text.replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
+
+
+def _md_code(text: str) -> str:
+    return f"`{text}`" if "`" not in text else f"`` {text} ``"
+
+
+def render_report_markdown(doc: dict) -> str:
+    """The same content as `render_report`, as GitHub-flavoured Markdown.
+
+    Suitable for a pull request comment or `$GITHUB_STEP_SUMMARY`. When the
+    document carries a `check` result, the new hosts are listed at the end.
+    """
+    server = doc["server"]
+    server_text = (
+        f"{server['name']} {server['version']} (protocol {server['protocol_version']})"
+        if server
+        else "unknown"
+    )
+    lines = [
+        "## mcp-egress report",
+        "",
+        f"Command: {_md_code(' '.join(doc['command']))}",
+        "",
+        f"Server: {server_text}, {len(doc['tools'])} tool(s), {len(doc['calls'])} call(s), "
+        f"{len(doc['hosts'])} host(s)",
+        "",
+        "### Hosts",
+        "",
+    ]
+    if doc["hosts"]:
+        lines.append(
+            "| host | port | scheme | first seen | tools | connections | bytes out | bytes in |"
+        )
+        lines.append("|---|---:|---|---|---|---:|---:|---:|")
+        for h in doc["hosts"]:
+            first = h["phase"] if not h["tool"] else f"{h['phase']}:{h['tool']}"
+            cells = [
+                h["host"],
+                str(h["port"]),
+                h["scheme"],
+                first,
+                ", ".join(h["tools"]) or "-",
+                str(h["connections"]),
+                _fmt_bytes(h["bytes_out"]),
+                _fmt_bytes(h["bytes_in"]),
+            ]
+            lines.append("| " + " | ".join(_md_cell(c) for c in cells) + " |")
+    else:
+        lines.append("No proxied connections were seen.")
+    names = domains(doc)
+    lines += [
+        "",
+        "### Claude Code permission rules",
+        "",
+        "For `permissions.allow` in a Claude Code settings file:",
+        "",
+        "```json",
+        render_claude_code_rules(doc) if names else "",
+        "```",
+        "",
+        "### Sandbox allowed domains",
+        "",
+        "For `sandbox.network.allowedDomains` or another sandbox allowlist:",
+        "",
+        "```json",
+        render_sandbox_domains(doc),
+        "```",
+        "",
+        "### Warnings",
+        "",
+    ]
+    if doc["warnings"]:
+        lines.extend(f"- `{w['code']}`: {_warning_text(w)}" for w in doc["warnings"])
+    else:
+        lines.append("No warnings.")
+    check = doc.get("check")
+    if check:
+        lines += ["", "### Baseline check", ""]
+        if check["ok"]:
+            missing = len(check["missing_hosts"])
+            extra = f" ({missing} baseline host(s) not seen this run)" if missing else ""
+            lines.append(f"Baseline {_md_code(check['baseline'])}: no new hosts{extra}.")
+        else:
+            lines.append(
+                f"Baseline {_md_code(check['baseline'])}: {len(check['new_hosts'])} new host(s):"
+            )
+            lines.append("")
+            lines.extend(
+                f"- {_md_code(key)} {_new_host_note(doc, key)}" for key in check["new_hosts"]
+            )
+    return "\n".join(lines)

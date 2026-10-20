@@ -10,7 +10,13 @@ from pathlib import Path
 from . import __version__
 from .analysis import warnings_for
 from .baseline import BaselineError, compare, load_baseline
-from .report import build_document, render_check, render_report, write_document
+from .report import (
+    build_document,
+    render_check,
+    render_report,
+    render_report_markdown,
+    write_document,
+)
 from .runner import RunError, load_calls, run_server
 
 EXIT_OK = 0
@@ -59,6 +65,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=30.0,
         metavar="SECONDS",
         help="per-request timeout for initialize, tools/list and each call (default 30)",
+    )
+    run.add_argument(
+        "--format",
+        choices=("text", "markdown"),
+        default="text",
+        help="report format on stdout (default text); markdown suits a pull request comment",
     )
     run.add_argument(
         "--server-stderr",
@@ -125,16 +137,24 @@ def run_command(ns: argparse.Namespace, command: list[str]) -> int:
             errlog.close()
 
     doc = build_document(result, warnings_for(result))
-    print(render_report(doc), file=out)
+    markdown = ns.format == "markdown"
+    if not markdown:
+        print(render_report(doc), file=out)
 
     status = EXIT_OK
+    comparison = None
     if baseline_doc is not None:
         comparison = compare(doc, baseline_doc, ns.baseline)
         doc["check"] = comparison.to_dict()
-        print("", file=out)
-        print(render_check(doc, comparison), file=out)
         if not comparison.ok:
             status = EXIT_NEW_HOSTS
+    if markdown:
+        print(render_report_markdown(doc), file=out)
+        # Keep stdout pure Markdown so it can be redirected into a comment body.
+        out = sys.stderr
+    elif comparison is not None:
+        print("", file=out)
+        print(render_check(doc, comparison), file=out)
 
     out_path = Path(ns.out) if ns.out else Path(DEFAULT_OUT)
     skip_out = ns.out is None and ns.check and out_path.resolve() == Path(ns.baseline).resolve()

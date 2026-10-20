@@ -9,11 +9,16 @@ All notable changes to this project are documented here. The format follows
 ### Added
 
 - `hidden-characters` warning: a tool whose `name`, `title` or `description` contains invisible or bidi-control characters (Unicode format characters such as zero-width spaces, bidi overrides and isolates, the byte order mark and tag characters, plus the variation selectors supplement) is flagged, with each code point named and any tag-character text decoded. It runs on the `tools/list` result, so it needs no calls and no network. The schema's warning `code` enum gains the value. Suggested by @rezearcher in #19.
+- `run --format markdown`: the report as GitHub-flavoured Markdown (hosts table, the two paste blocks as fenced code, warnings as a list and, with `--check`, the new hosts), for a pull request comment or `$GITHUB_STEP_SUMMARY`. Status lines move to stderr in this mode so stdout is pure Markdown. `--format text` stays the default. (#10)
 
 ### Fixed
 
 - `--check` validates every `hosts` entry of the baseline before the server starts. A hand-written baseline with a missing host or a port that is not a number now exits 2 with the file name and the bad value, instead of running the server and then stopping with a traceback. A port written as a numeric string (`"443"`) is accepted.
 - The proxy answers `400 Bad Request` to an absolute-form request whose port is out of range (`http://host:99999/`) instead of dropping the connection without a reply.
+
+### Changed
+
+- README: a first screen with who the tool is for, a three-line quick start and a real run.
 
 ## [0.1.1] - 2026-10-06
 

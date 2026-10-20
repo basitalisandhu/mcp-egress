@@ -11,8 +11,9 @@ import jsonschema
 import pytest
 
 from mcp_egress.analysis import CODE_OPEN_WORLD, CODE_OUTSIDE_BASE, CODE_PROXY_BYPASS, warnings_for
+from mcp_egress.baseline import compare
 from mcp_egress.recorder import PHASE_CALL, PHASE_LIST
-from mcp_egress.report import build_document, render_report
+from mcp_egress.report import build_document, render_report, render_report_markdown
 from mcp_egress.runner import CallSpec, RunError, child_environment, load_calls, run_server
 
 SCHEMA = json.loads((Path(__file__).parent.parent / "schema" / "egress.schema.json").read_text())
@@ -144,6 +145,59 @@ def test_report_lists_hosts_tools_and_paste_blocks(proxied_run):
     assert '"WebFetch(domain:127.0.0.1)",' in text
     assert "sandbox.network.allowedDomains" in text and '"127.0.0.1"' in text
     assert "open-world-hint-false" in text and "ping:" in text
+
+
+def test_markdown_report_has_the_table_paste_blocks_and_warnings(proxied_run):
+    _, doc, server = proxied_run
+    md = render_report_markdown(doc)
+    assert md == render_report_markdown(doc), "rendering is deterministic"
+    assert (
+        "| host | port | scheme | first seen | tools | connections | bytes out | bytes in |" in md
+    )
+    assert f"| 127.0.0.1 | {server.port} | http | call:fetch | fetch, ping | 2 |" in md
+    assert '```json\n"WebFetch(domain:127.0.0.1)",\n```' in md
+    assert '```json\n[\n  "127.0.0.1"\n]\n```' in md
+    assert "- `open-world-hint-false`: ping: declares openWorldHint false" in md
+    assert "### Baseline check" not in md
+
+
+def test_markdown_report_lists_new_hosts_after_a_check(proxied_run):
+    _, doc, server = proxied_run
+    baseline = {"hosts": [{"host": "api.example", "port": 443}]}
+    doc = dict(doc, check=compare(doc, baseline, "b.json").to_dict())
+    md = render_report_markdown(doc)
+    assert "### Baseline check" in md and "Baseline `b.json`: 1 new host(s):" in md
+    assert f"- `127.0.0.1:{server.port}` (tools: fetch, ping, tunnel)" in md
+
+
+def test_markdown_report_escapes_pipes_and_handles_an_empty_run():
+    doc = {
+        "command": ["srv", "a|b"],
+        "server": None,
+        "tools": [],
+        "calls": [],
+        "warnings": [],
+        "check": None,
+        "hosts": [
+            {
+                "host": "a.example",
+                "port": 443,
+                "scheme": "https",
+                "phase": "list",
+                "tool": None,
+                "tools": ["x|y"],
+                "connections": 1,
+                "bytes_out": 0,
+                "bytes_in": 2048,
+            }
+        ],
+    }
+    md = render_report_markdown(doc)
+    assert "| a.example | 443 | https | list | x\\|y | 1 | 0 B | 2.0 kB |" in md
+    assert "Server: unknown" in md and "No warnings." in md
+    empty = render_report_markdown(dict(doc, hosts=[]))
+    assert "No proxied connections were seen." in empty
+    assert "```json\n\n```" in empty and "```json\n[]\n```" in empty
 
 
 def test_declared_base_url_on_the_command_line_flags_other_hosts(

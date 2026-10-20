@@ -198,3 +198,28 @@ def test_malformed_baseline_entry_exits_2_before_the_server_starts(tmp_path, cap
     assert _run(tmp_path, server, "--check", "--baseline", str(baseline)) == EXIT_USAGE
     assert "bad port" in capsys.readouterr().err
     assert not marker.exists()
+
+
+def test_markdown_format_keeps_stdout_pure_markdown(tmp_path, proxied_command, http_server, capsys):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps({"hosts": [{"host": "api.example", "port": 443}]}))
+    out = tmp_path / "egress.json"
+    code = _run(
+        tmp_path,
+        proxied_command,
+        "--calls",
+        _calls_file(tmp_path, http_server.url + "/md"),
+        "--baseline",
+        str(baseline),
+        "--check",
+        "--out",
+        str(out),
+        "--format",
+        "markdown",
+    )
+    assert code == EXIT_NEW_HOSTS
+    captured = capsys.readouterr()
+    assert captured.out.startswith("## mcp-egress report\n")
+    assert "### Baseline check" in captured.out
+    assert "Wrote" not in captured.out and f"Wrote {out}" in captured.err
+    assert json.loads(out.read_text())["check"]["ok"] is False
