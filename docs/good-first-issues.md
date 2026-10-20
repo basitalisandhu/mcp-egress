@@ -8,6 +8,8 @@ keep binding 127.0.0.1 only, and nothing in the tests may reach the internet.
 
 ## 1. Record the resolved IP addresses next to each host
 
+**Status.** Done in 0.1.1 (#14).
+
 **Context.** `hosts` entries carry the name the server asked for. Reviewers comparing a
 baseline with a firewall log want the addresses the name resolved to at the time.
 
@@ -42,6 +44,8 @@ the baseline.
 
 ## 3. Markdown report for pull request comments
 
+**Status.** Done in 0.2.0 (#10, #23).
+
 **Context.** The terminal table is plain text. A Markdown rendering with the same content
 can be posted as a pull request comment by a workflow step.
 
@@ -74,6 +78,8 @@ parameters (`list_projects`, `whoami`, `health`) that could be called without on
 - README options table gains the flag with the destructive-tool rule spelled out.
 
 ## 5. A composite GitHub Action for the baseline check
+
+**Status.** Open as a `help wanted` issue (#12); larger than a first issue.
 
 **Context.** The README shows a workflow that installs the tool and runs it. A composite
 action in `action/` would make the check a two-line step and could upload `egress.json` as

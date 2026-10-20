@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-10-20
+
 ### Added
 
 - `hidden-characters` warning: a tool whose `name`, `title` or `description` contains invisible or bidi-control characters (Unicode format characters such as zero-width spaces, bidi overrides and isolates, the byte order mark and tag characters, plus the variation selectors supplement) is flagged, with each code point named and any tag-character text decoded. It runs on the `tools/list` result, so it needs no calls and no network. The schema's warning `code` enum gains the value. Suggested by @rezearcher in #19.
@@ -49,6 +53,7 @@ All notable changes to this project are documented here. The format follows
 
 - Renamed the umbrella project from Hisar to Masoon; links, names and identifiers updated.
 
-[Unreleased]: https://github.com/basitalisandhu/mcp-egress/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/basitalisandhu/mcp-egress/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/basitalisandhu/mcp-egress/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/basitalisandhu/mcp-egress/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/basitalisandhu/mcp-egress/releases/tag/v0.1.0
