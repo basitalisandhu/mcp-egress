@@ -81,3 +81,83 @@ def compare(current: dict, baseline: dict, baseline_name: str) -> Comparison:
 def tools_reaching(doc: dict, key: str) -> list[str]:
     """Names of the tools in `doc` whose host list contains `key`."""
     return [t["name"] for t in doc.get("tools", []) if key in t.get("hosts", [])]
+
+
+@dataclass
+class DocumentDiff:
+    comparison: Comparison
+    added_hosts: dict[str, list[str]]
+    removed_hosts: dict[str, list[str]]
+    changed_tools: dict[str, Comparison]
+
+
+def _tool_documents(doc: dict) -> dict[str, dict]:
+    """Aggregate repeated tool names while normalising keys as compare() does."""
+    tools = doc.get("tools", [])
+    if not isinstance(tools, list):
+        raise BaselineError("'tools' must be a list")
+    result: dict[str, dict] = {}
+    for tool in tools:
+        if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
+            raise BaselineError("a tools entry lacks a string name")
+        hosts = tool.get("hosts", [])
+        if not isinstance(hosts, list) or not all(isinstance(host, str) for host in hosts):
+            raise BaselineError("a tool's hosts must be a list of host:port strings")
+        target = result.setdefault(tool["name"], {"hosts": []})
+        for key in hosts:
+            try:
+                host, port = key.rsplit(":", 1)
+                port_number = int(port)
+                if not host:
+                    raise ValueError
+            except ValueError:
+                raise BaselineError(f"bad tool host key {key!r}") from None
+            target["hosts"].append({"host": host, "port": port_number})
+    return result
+
+
+def diff_documents(old: dict, new: dict, baseline_name: str) -> DocumentDiff:
+    """Compare saved documents without running a server or modifying either file."""
+    comparison = compare(new, old, baseline_name)
+    before = _tool_documents(old)
+    after = _tool_documents(new)
+    changed: dict[str, Comparison] = {}
+    for name in dict.fromkeys([*before, *after]):
+        change = compare(
+            after.get(name, {"hosts": []}), before.get(name, {"hosts": []}), baseline_name
+        )
+        if change.new_hosts or change.missing_hosts:
+            changed[name] = change
+
+    def attribution(keys: list[str], tools: dict[str, dict]) -> dict[str, list[str]]:
+        tool_keys = {name: document_host_keys(doc) for name, doc in tools.items()}
+        return {key: [name for name, hosts in tool_keys.items() if key in hosts] for key in keys}
+
+    return DocumentDiff(
+        comparison,
+        attribution(comparison.new_hosts, after),
+        attribution(comparison.missing_hosts, before),
+        changed,
+    )
+
+
+def render_diff(result: DocumentDiff) -> str:
+    lines: list[str] = []
+    for label, hosts in (
+        ("added hosts", result.added_hosts),
+        ("removed hosts", result.removed_hosts),
+    ):
+        lines.append(f"{label} ({len(hosts)}):")
+        for host, tools in hosts.items():
+            note = "tools: " + ", ".join(tools) if tools else "no tool attribution"
+            lines.append(f"  {host}  ({note})")
+        if not hosts:
+            lines.append("  (none)")
+    lines.append(f"changed tools ({len(result.changed_tools)}):")
+    for name, change in result.changed_tools.items():
+        lines.append(f"  {name}")
+        lines.append("    added: " + (", ".join(change.new_hosts) or "(none)"))
+        lines.append("    removed: " + (", ".join(change.missing_hosts) or "(none)"))
+    if not result.changed_tools:
+        lines.append("  (none)")
+    return "\n".join(lines)
