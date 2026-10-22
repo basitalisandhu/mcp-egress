@@ -101,6 +101,23 @@ pip install mcp-egress
 
 ## Usage
 
+### Compare saved egress documents
+
+```sh
+mcp-egress diff old-egress.json new-egress.json
+```
+
+`diff` runs no MCP server and changes neither file. It shows globally added and
+removed `host:port` keys, the tools that reached each in the appropriate document,
+and tools whose host sets changed. Hosts without tool attribution are labelled
+explicitly. Host case, duplicate host rows and host-list ordering do not create
+changes; repeated tool names are aggregated.
+
+Exit codes are 1 when a globally new host appears, 0 otherwise (including removal-only
+or tool-only changes), and 2 for unreadable/malformed documents. Both files need a
+`hosts` array; malformed tool host lists are reported rather than causing a traceback.
+This makes baseline-update reviews possible without rerunning an agent or server.
+
 ```bash
 mcp-egress run [options] -- <command> [args...]
 ```

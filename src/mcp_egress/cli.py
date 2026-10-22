@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import __version__
 from .analysis import warnings_for
-from .baseline import BaselineError, compare, load_baseline
+from .baseline import BaselineError, compare, diff_documents, load_baseline, render_diff
 from .report import (
     build_document,
     render_check,
@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"mcp-egress {__version__}")
     sub = parser.add_subparsers(dest="subcommand", metavar="COMMAND")
+    diff = sub.add_parser(
+        "diff", help="compare two saved egress documents without running a server"
+    )
+    diff.add_argument("old", metavar="OLD.json")
+    diff.add_argument("new", metavar="NEW.json")
     run = sub.add_parser(
         "run",
         help="spawn a stdio server, run initialize, tools/list and optional calls",
@@ -91,8 +96,19 @@ def split_command(argv: list[str]) -> tuple[list[str], list[str]]:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    options, command = split_command(args)
     parser = build_parser()
+    if args and args[0] == "diff":
+        ns = parser.parse_args(args)
+        try:
+            result = diff_documents(
+                load_baseline(Path(ns.old)), load_baseline(Path(ns.new)), ns.old
+            )
+        except BaselineError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        print(render_diff(result))
+        return EXIT_OK if result.comparison.ok else EXIT_NEW_HOSTS
+    options, command = split_command(args)
     ns = parser.parse_args(options)
     if ns.subcommand != "run":
         parser.print_help()
