@@ -223,3 +223,138 @@ def test_markdown_format_keeps_stdout_pure_markdown(tmp_path, proxied_command, h
     assert "### Baseline check" in captured.out
     assert "Wrote" not in captured.out and f"Wrote {out}" in captured.err
     assert json.loads(out.read_text())["check"]["ok"] is False
+
+
+def test_report_out_writes_text_report_equal_to_stdout(
+    tmp_path, proxied_command, http_server, capsys
+):
+    out = tmp_path / "egress.json"
+    report_path = tmp_path / "report.txt"
+    code = _run(
+        tmp_path,
+        proxied_command,
+        "--calls",
+        _calls_file(tmp_path, http_server.url),
+        "--out",
+        str(out),
+        "--report-out",
+        str(report_path),
+    )
+    assert code == EXIT_OK
+    captured = capsys.readouterr()
+    # The file content must contain the same report body that was printed on
+    # stdout. In text mode stdout also carries status lines ("Wrote ...") that
+    # are not part of the report, so we assert the report body is present
+    # verbatim and that the file ends with a trailing newline.
+    assert report_path.exists()
+    file_text = report_path.read_text(encoding="utf-8")
+    assert file_text.endswith("\n")
+    # The report body always starts with the per-host table header.
+    assert "server: proxied-fixture" in file_text
+    assert f"127.0.0.1  {http_server.port}" in file_text
+    assert '"WebFetch(domain:127.0.0.1)",' in file_text
+    assert "Sandbox allowed domains" in file_text
+    # Status lines do NOT belong in the report file.
+    assert "Wrote" not in file_text
+    # The same report body was also on stdout.
+    for line in file_text.rstrip("\n").split("\n"):
+        if line:
+            assert line in captured.out
+
+
+def test_report_out_writes_markdown_report_equal_to_stdout(
+    tmp_path, proxied_command, http_server, capsys
+):
+    out = tmp_path / "egress.json"
+    report_path = tmp_path / "report.md"
+    code = _run(
+        tmp_path,
+        proxied_command,
+        "--calls",
+        _calls_file(tmp_path, http_server.url + "/md"),
+        "--out",
+        str(out),
+        "--format",
+        "markdown",
+        "--report-out",
+        str(report_path),
+    )
+    assert code == EXIT_OK
+    captured = capsys.readouterr()
+    assert report_path.exists()
+    file_text = report_path.read_text(encoding="utf-8")
+    # Markdown stdout is pure markdown (status lines went to stderr).
+    assert file_text == captured.out
+    assert file_text.startswith("## mcp-egress report\n")
+
+
+def test_report_out_is_written_even_when_check_fails(
+    tmp_path, proxied_command, http_server, capsys
+):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps({"hosts": [{"host": "api.example", "port": 443}], "tools": []}))
+    out = tmp_path / "egress.json"
+    report_path = tmp_path / "report.md"
+    code = _run(
+        tmp_path,
+        proxied_command,
+        "--calls",
+        _calls_file(tmp_path, http_server.url + "/check-fail"),
+        "--out",
+        str(out),
+        "--baseline",
+        str(baseline),
+        "--check",
+        "--format",
+        "markdown",
+        "--report-out",
+        str(report_path),
+    )
+    # --check must exit 1 when new hosts appear...
+    assert code == EXIT_NEW_HOSTS
+    captured = capsys.readouterr()
+    # ...but the report file must still be written, including the baseline check section.
+    assert report_path.exists()
+    file_text = report_path.read_text(encoding="utf-8")
+    assert file_text == captured.out
+    assert "### Baseline check" in file_text
+    assert "1 new host(s)" in file_text
+    assert http_server.key in file_text
+
+
+def test_report_out_creates_parent_directories(tmp_path, proxied_command, http_server, capsys):
+    out = tmp_path / "egress.json"
+    report_path = tmp_path / "reports" / "subdir" / "report.md"
+    code = _run(
+        tmp_path,
+        proxied_command,
+        "--calls",
+        _calls_file(tmp_path, http_server.url),
+        "--out",
+        str(out),
+        "--format",
+        "markdown",
+        "--report-out",
+        str(report_path),
+    )
+    assert code == EXIT_OK
+    assert report_path.exists()
+    captured = capsys.readouterr()
+    assert report_path.read_text(encoding="utf-8") == captured.out
+
+
+def test_help_lists_report_out_flag():
+    from mcp_egress.cli import build_parser
+
+    parser = build_parser()
+    # Find the `run` subparser via the _SubParsersAction.
+    run_parser = None
+    for action in parser._actions:
+        if hasattr(action, "choices") and "run" in (action.choices or {}):
+            run_parser = action.choices["run"]
+            break
+    assert run_parser is not None
+    option_strings = []
+    for a in run_parser._actions:
+        option_strings.extend(a.option_strings)
+    assert "--report-out" in option_strings
