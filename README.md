@@ -115,6 +115,7 @@ Options go before `--`; everything after `--` is the server command, exactly as 
 | `--check` | Exit 1 when a `host:port` seen in this run is not in the baseline. Hosts in the baseline that were not seen are reported, not failed. |
 | `--timeout SECONDS` | Per-request timeout for `initialize`, `tools/list` and each call. Default 30. A call that times out is recorded as failed; the run continues. |
 | `--format text\|markdown` | Report format on stdout. Default `text`. `markdown` prints the same content as GitHub-flavoured Markdown (see below) and moves the `Wrote ...` status lines to stderr, so stdout can be redirected straight into a pull request comment or `$GITHUB_STEP_SUMMARY`. |
+| `--report-out FILE` | Write the rendered report (in the selected `--format`) to `FILE`, in addition to stdout. UTF-8, ends with a newline. The file is written even when `--check` exits 1, so a later workflow step can post it as a PR comment. Parent directories are created if missing. |
 | `--server-stderr FILE` | Write the server's stderr to a file instead of passing it through. |
 
 Exit codes: `0` ok, `1` new hosts with `--check`, `2` usage error (bad options, unreadable calls file, missing baseline), `3` the server could not be started or did not get through `initialize` and `tools/list`.
