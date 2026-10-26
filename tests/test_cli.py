@@ -223,3 +223,85 @@ def test_markdown_format_keeps_stdout_pure_markdown(tmp_path, proxied_command, h
     assert "### Baseline check" in captured.out
     assert "Wrote" not in captured.out and f"Wrote {out}" in captured.err
     assert json.loads(out.read_text())["check"]["ok"] is False
+
+
+@pytest.mark.parametrize("report_format", ["text", "markdown"])
+@pytest.mark.parametrize("check", [False, True])
+def test_report_out_matches_stdout_even_on_failed_check(
+    tmp_path, proxied_command, http_server, capsys, report_format, check
+):
+    report = tmp_path / "résumé.txt"
+    options = [
+        "--out",
+        str(tmp_path / "egress.json"),
+        "--format",
+        report_format,
+        "--report-out",
+        str(report),
+        "--calls",
+        _calls_file(tmp_path, http_server.url),
+    ]
+    if check:
+        baseline = tmp_path / "baseline.json"
+        baseline.write_text(json.dumps({"hosts": [], "tools": []}))
+        options += ["--check", "--baseline", str(baseline)]
+    assert _run(tmp_path, proxied_command, *options) == (EXIT_NEW_HOSTS if check else EXIT_OK)
+    stdout = capsys.readouterr().out
+    assert report.read_bytes() == stdout.encode("utf-8")
+    assert stdout.endswith("\n")
+    if check:
+        assert "127.0.0.1" in stdout
+
+
+@pytest.mark.parametrize("protected", ["--out", "--baseline", "--calls", "--server-stderr"])
+def test_report_out_rejects_file_collision_before_spawning(tmp_path, capsys, protected):
+    target = tmp_path / "protected.json"
+    target.write_text("original", encoding="utf-8")
+    assert (
+        _run(tmp_path, ["must-not-run"], protected, str(target), "--report-out", str(target))
+        == EXIT_USAGE
+    )
+    assert target.read_text() == "original"
+    assert "must not overwrite" in capsys.readouterr().err
+
+
+def test_report_out_rejects_default_document_collision(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert _run(tmp_path, ["must-not-run"], "--report-out", "egress.json") == EXIT_USAGE
+    assert "must not overwrite" in capsys.readouterr().err
+
+
+def test_report_out_write_error_does_not_claim_success(tmp_path, proxied_command, capsys):
+    out = tmp_path / "egress.json"
+    assert (
+        _run(
+            tmp_path,
+            proxied_command,
+            "--out",
+            str(out),
+            "--report-out",
+            str(tmp_path / "missing" / "report.txt"),
+        )
+        == EXIT_USAGE
+    )
+    captured = capsys.readouterr()
+    assert "server: proxied-fixture" in captured.out
+    assert "cannot write --report-out" in captured.err
+    assert json.loads(out.read_text())["format_version"] == 1
+
+
+@pytest.mark.parametrize("alias_kind", ["symlink", "hardlink"])
+def test_report_out_rejects_alias_of_protected_file(tmp_path, capsys, alias_kind):
+    target = tmp_path / "evidence.json"
+    target.write_text("keep me", encoding="utf-8")
+    alias = tmp_path / "report.txt"
+    if alias_kind == "symlink":
+        alias.symlink_to(target)
+    else:
+        alias.hardlink_to(target)
+    assert (
+        _run(tmp_path, ["must-not-run"], "--out", str(target), "--report-out", str(alias))
+        == EXIT_USAGE
+    )
+    assert target.read_text() == "keep me"
+    assert "must not overwrite" in capsys.readouterr().err
