@@ -118,5 +118,19 @@ async def sleep(seconds: float) -> str:
     return f"slept {seconds}"
 
 
+@server.tool(annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False))
+def wipe() -> str:
+    """Destructive zero-argument tool skipped by --auto-calls unless explicitly requested."""
+    return "wiped"
+
+
+@server.tool()
+def reset() -> str:
+    """Unannotated zero-argument tool skipped by --auto-calls because destructiveHint
+    defaults to true.
+    """
+    return "reset"
+
+
 if __name__ == "__main__":
     server.run("stdio")

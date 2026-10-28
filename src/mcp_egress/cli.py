@@ -61,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--calls", metavar="FILE", help="JSON file of {tool, arguments} calls")
     run.add_argument(
+        "--auto-calls",
+        action="store_true",
+        help="call every tool from tools/list that needs no arguments",
+    )
+    run.add_argument(
         "--baseline",
         metavar="FILE",
         help="baseline egress.json: written when --check is absent, compared with --check",
@@ -151,7 +156,9 @@ def run_command(ns: argparse.Namespace, command: list[str]) -> int:
     if ns.server_stderr:
         errlog = open(ns.server_stderr, "w", encoding="utf-8")  # noqa: SIM115 - closed below
     try:
-        result = asyncio.run(run_server(command, calls, timeout=ns.timeout, errlog=errlog))
+        result = asyncio.run(
+            run_server(command, calls, timeout=ns.timeout, errlog=errlog, auto_calls=ns.auto_calls)
+        )
     except RunError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_SERVER
@@ -165,7 +172,7 @@ def run_command(ns: argparse.Namespace, command: list[str]) -> int:
     doc = build_document(result, warnings_for(result))
     markdown = ns.format == "markdown"
     if not markdown:
-        print(render_report(doc), file=out)
+        print(render_report(doc, skipped_destructive=result.skipped_destructive), file=out)
 
     status = EXIT_OK
     comparison = None
@@ -175,7 +182,7 @@ def run_command(ns: argparse.Namespace, command: list[str]) -> int:
         if not comparison.ok:
             status = EXIT_NEW_HOSTS
     if markdown:
-        print(render_report_markdown(doc), file=out)
+        print(render_report_markdown(doc, skipped_destructive=result.skipped_destructive), file=out)
         # Keep stdout pure Markdown so it can be redirected into a comment body.
         out = sys.stderr
     elif comparison is not None:

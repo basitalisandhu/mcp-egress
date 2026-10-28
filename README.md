@@ -158,6 +158,7 @@ Options go before `--`; everything after `--` is the server command, exactly as 
 | Option | What it does |
 |---|---|
 | `--calls FILE` | JSON file of calls to make after `tools/list`: a list of `{"tool": name, "arguments": {...}}`, or an object with a `calls` list. Without it only `initialize` and `tools/list` run. |
+| `--auto-calls` | Append one call with empty arguments (`{}`) after `--calls` for every tool from `tools/list` whose `inputSchema` has no `required` entries and that is not already in `--calls`. Tools are only called automatically when `readOnlyHint` is true or `destructiveHint` is explicitly false; unannotated or destructive tools are skipped unless listed in `--calls`. A note listing any skipped tools is included in the report. |
 | `--out FILE` | Where to write the run document. Default `egress.json`. |
 | `--baseline FILE` | Without `--check`: also save this run as the baseline. With `--check`: the baseline to compare against (never modified). |
 | `--check` | Exit 1 when a `host:port` seen in this run is not in the baseline. Hosts in the baseline that were not seen are reported, not failed. |

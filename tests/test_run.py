@@ -67,7 +67,7 @@ def test_proxied_server_hosts_are_recorded_with_phase_and_tool(proxied_run):
 def test_tools_section_carries_annotations_and_hosts(proxied_run):
     _, doc, server = proxied_run
     tools = {t["name"]: t for t in doc["tools"]}
-    assert set(tools) == {"fetch", "ping", "tunnel", "echo", "env", "sleep"}
+    assert set(tools) == {"fetch", "ping", "tunnel", "echo", "env", "sleep", "wipe", "reset"}
     assert tools["fetch"]["annotations"] == {"readOnlyHint": True, "openWorldHint": True}
     assert tools["fetch"]["hosts"] == [server.key]
     assert tools["tunnel"]["hosts"] == [server.key]
@@ -227,10 +227,46 @@ def test_socket_server_bypasses_the_proxy_and_is_warned_about(
 
 def test_list_phase_without_calls(proxied_command, server_log):
     result = run(proxied_command, [], server_log)
-    assert result.calls == [] and len(result.tools) == 6
+    assert result.calls == [] and len(result.tools) == 8
     assert result.recorder.connections == []
     assert result.recorder.phase == "shutdown"
     assert PHASE_LIST not in {c.phase for c in result.recorder.connections}
+
+
+def test_auto_calls_runs_zero_arg_tools_and_skips_destructive(
+    proxied_command, http_server, server_log, tmp_path, capsys
+):
+    from mcp_egress.cli import EXIT_OK, main
+
+    explicit_url = http_server.url + "/explicit"
+    result = asyncio.run(
+        run_server(
+            proxied_command,
+            [CallSpec("ping", {"url": explicit_url})],
+            errlog=server_log,
+            auto_calls=True,
+        )
+    )
+    got_calls = [(c.tool, c.arguments) for c in result.calls]
+    assert got_calls == [("ping", {"url": explicit_url}), ("env", {})]
+    assert "fetch" not in {c.tool for c in result.calls}
+    assert result.skipped_destructive == ["wipe", "reset"]
+
+    out_file = tmp_path / "auto.json"
+    err_log = str(tmp_path / "stderr.log")
+    argv = ["run", "--auto-calls", "--out", str(out_file), "--server-stderr", err_log, "--"]
+    code = main([*argv, *proxied_command])
+    assert code == EXIT_OK
+    stdout = capsys.readouterr().out
+    assert "wipe" in stdout
+    assert "reset" in stdout
+    assert "destructive" in stdout.lower()
+    doc = json.loads(out_file.read_text())
+    called_names = [c["tool"] for c in doc["calls"]]
+    assert "env" in called_names
+    assert "fetch" not in called_names
+    assert "wipe" not in called_names
+    assert "reset" not in called_names
 
 
 def test_timed_out_call_is_recorded_not_raised(proxied_command, server_log):
@@ -277,3 +313,27 @@ def test_outer_proxy_in_the_test_environment_is_not_used(proxied_command, http_s
     """Whatever HTTPS_PROXY or NO_PROXY say outside, the recording proxy sees the call."""
     result = run(proxied_command, [CallSpec("fetch", {"url": http_server.url})], server_log)
     assert [c.key for c in result.recorder.connections] == [http_server.key]
+
+
+def test_auto_calls_markdown_includes_skipped_note(proxied_command, tmp_path, capsys):
+    from mcp_egress.cli import EXIT_OK, main
+
+    out_file = tmp_path / "auto_md.json"
+    err_log = str(tmp_path / "stderr.log")
+    argv = [
+        "run",
+        "--auto-calls",
+        "--format",
+        "markdown",
+        "--out",
+        str(out_file),
+        "--server-stderr",
+        err_log,
+        "--",
+    ]
+    code = main([*argv, *proxied_command])
+    assert code == EXIT_OK
+    stdout = capsys.readouterr().out
+    assert "wipe" in stdout
+    assert "reset" in stdout
+    assert "destructive" in stdout.lower()
