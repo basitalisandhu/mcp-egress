@@ -115,16 +115,32 @@ explicitly. Host case, duplicate host rows and host-list ordering do not create
 changes; repeated tool names are aggregated.
 
 With `--format json` (default is `text`) the same content is printed as a JSON
-object so CI scripts can read it without parsing the text form:
+object (keys sorted) so CI scripts can read it without parsing the text form.
+For an `old.example` to `new.example` move of the `fetch` tool:
 
 ```json
 {
-  "added_hosts": {"new.example:443": ["fetch"]},
-  "removed_hosts": {"old.example:443": ["fetch"]},
-  "changed_tools": {
-    "fetch": {"added": ["new.example:443"], "removed": ["old.example:443"]}
+  "added_hosts": {
+    "new.example:443": [
+      "fetch"
+    ]
   },
-  "ok": false
+  "changed_tools": {
+    "fetch": {
+      "added": [
+        "new.example:443"
+      ],
+      "removed": [
+        "old.example:443"
+      ]
+    }
+  },
+  "ok": false,
+  "removed_hosts": {
+    "old.example:443": [
+      "fetch"
+    ]
+  }
 }
 ```
 
