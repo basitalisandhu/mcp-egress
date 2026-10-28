@@ -1,0 +1,76 @@
+name: "mcp-egress check"
+description: "Record every host an MCP server contacts and fail when one is not in the baseline."
+author: "Muhammad Basit Ali"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  command:
+    description: "The server command, as one string (split like a shell would), for example `uvx some-mcp-server`."
+    required: true
+  calls:
+    description: "Calls file (a list of {tool, arguments}). Empty: initialize and tools/list only."
+    required: false
+    default: ""
+  baseline:
+    description: "Baseline egress document. Compared with `check: true`; written when `check` is false."
+    required: false
+    default: "egress.baseline.json"
+  check:
+    description: "true: exit 1 when a host is not in the baseline. false: record and write the baseline."
+    required: false
+    default: "true"
+  out:
+    description: "Where to write this run's egress document."
+    required: false
+    default: "egress.json"
+  python-version:
+    description: "Python version for the tool."
+    required: false
+    default: "3.12"
+  version:
+    description: "PyPI version to install. Empty: install from the action's own checkout."
+    required: false
+    default: ""
+
+outputs:
+  out:
+    description: "Path of the egress document written by this run."
+    value: ${{ steps.run.outputs.out }}
+  new-hosts:
+    description: "Comma-separated host:port keys not in the baseline (empty when none or not checked)."
+    value: ${{ steps.run.outputs.new-hosts }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      id: python
+      with:
+        python-version: ${{ inputs.python-version }}
+        update-environment: false
+    - name: Install mcp-egress
+      shell: bash
+      env:
+        PYTHON: ${{ steps.python.outputs.python-path }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        "$PYTHON" -m venv "$RUNNER_TEMP/mcp-egress-venv"
+        if [ -n "$VERSION" ]; then
+          "$RUNNER_TEMP/mcp-egress-venv/bin/pip" install --quiet "mcp-egress==$VERSION"
+        else
+          "$RUNNER_TEMP/mcp-egress-venv/bin/pip" install --quiet "$GITHUB_ACTION_PATH/.."
+        fi
+    - name: Run mcp-egress
+      id: run
+      shell: bash
+      env:
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_CALLS: ${{ inputs.calls }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_CHECK: ${{ inputs.check }}
+        INPUT_OUT: ${{ inputs.out }}
+        MCP_EGRESS_BIN: ${{ runner.temp }}/mcp-egress-venv/bin/mcp-egress
+        PYTHON: ${{ steps.python.outputs.python-path }}
+      run: '"$PYTHON" "$GITHUB_ACTION_PATH/run.py"'

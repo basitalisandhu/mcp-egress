@@ -16,6 +16,7 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.shared.exceptions import MCPError
 
 from .analysis import network_evidence
+from .jsonfile import read_json
 from .proxy import RecordingProxy
 from .recorder import PHASE_CALL, PHASE_LIST, PHASE_SHUTDOWN, Recorder, utc_now
 
@@ -129,8 +130,7 @@ def child_environment(proxy_url: str, base: dict[str, str] | None = None) -> dic
 
 def load_calls(path: str) -> list[CallSpec]:
     """Read a calls file: a list of `{tool, arguments}` or `{"calls": [...]}`."""
-    with open(path, encoding="utf-8") as fh:
-        data = json.load(fh)
+    data = read_json(path)
     if isinstance(data, dict):
         data = data.get("calls")
     if not isinstance(data, list):

@@ -63,7 +63,7 @@ def test_load_baseline_errors(tmp_path):
         load_baseline(tmp_path / "missing.json")
     bad = tmp_path / "bad.json"
     bad.write_text("{not json")
-    with pytest.raises(BaselineError, match="cannot read"):
+    with pytest.raises(BaselineError, match=r"bad\.json is not valid JSON"):
         load_baseline(bad)
     nohosts = tmp_path / "nohosts.json"
     nohosts.write_text(json.dumps({"tools": []}))

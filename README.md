@@ -76,19 +76,19 @@ Once the package is on PyPI the short forms work too: `pipx install mcp-egress`,
 Each release tag publishes `ghcr.io/basitalisandhu/mcp-egress` for linux/amd64 and linux/arm64, tagged with the version and `latest`. The image runs as uid 1000 with `/work` as the working directory:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/mcp-egress:0.2.0 \
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/mcp-egress:0.3.0 \
   run --calls calls.json --baseline egress.baseline.json --check --out egress.json -- python server.py
 ```
 
-`mcp-egress run` starts the MCP server inside the container, so the server command has to work there. The image contains Python 3.12 and the `mcp` package and nothing else: a Python server in the mounted directory that needs only `mcp` and the standard library runs as is. Servers started with `npx`, `uvx` or another runtime need an image of your own that adds that runtime (`FROM ghcr.io/basitalisandhu/mcp-egress:0.2.0`), or a local install of mcp-egress. The baseline, `--check` and the `egress.json` document behave the same in the container; the mounted directory must be writable by uid 1000.
+`mcp-egress run` starts the MCP server inside the container, so the server command has to work there. The image contains Python 3.12 and the `mcp` package and nothing else: a Python server in the mounted directory that needs only `mcp` and the standard library runs as is. Servers started with `npx`, `uvx` or another runtime need an image of your own that adds that runtime (`FROM ghcr.io/basitalisandhu/mcp-egress:0.3.0`), or a local install of mcp-egress. The baseline, `--check` and the `egress.json` document behave the same in the container; the mounted directory must be writable by uid 1000.
 
 The image is signed with a keyless cosign signature and has a build provenance attestation and an SPDX SBOM (attached to the GitHub Release). To verify:
 
 ```bash
-cosign verify ghcr.io/basitalisandhu/mcp-egress:0.2.0 \
+cosign verify ghcr.io/basitalisandhu/mcp-egress:0.3.0 \
   --certificate-identity-regexp '^https://github.com/basitalisandhu/mcp-egress/\.github/workflows/publish-github-packages\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
-gh attestation verify oci://ghcr.io/basitalisandhu/mcp-egress:0.2.0 --repo basitalisandhu/mcp-egress
+gh attestation verify oci://ghcr.io/basitalisandhu/mcp-egress:0.3.0 --repo basitalisandhu/mcp-egress
 ```
 
 ### pip
@@ -286,6 +286,25 @@ jobs:
           path: egress.json
 ```
 
+Or use the composite action in this repository, which installs the tool, runs the check, sets `out` and `new-hosts` outputs and still fails the step on a new host (Linux and macOS runners):
+
+```yaml
+      - uses: actions/checkout@v7
+      - id: egress
+        uses: basitalisandhu/mcp-egress/action@v0.3.0
+        with:
+          command: uvx some-mcp-server
+          calls: calls.json
+          baseline: egress.baseline.json   # the default
+          check: true                      # the default; false records the baseline instead
+        env:
+          SOME_API_KEY: ${{ secrets.SOME_API_KEY }}
+      - if: always()
+        run: echo "new hosts: ${{ steps.egress.outputs.new-hosts }}"
+```
+
+Inputs: `command` (required, split like a shell would), `calls`, `baseline`, `check`, `out` (default `egress.json`), `python-version` (default `3.12`) and `version` (a PyPI version to install; leave it empty to install from the action's own checkout, which is the only option until the package is on PyPI). The action installs into its own virtual environment and never sets a proxy variable; the tool does that for the server it starts.
+
 To show the result on the run page or in a pull request comment, add `--format markdown` and send stdout to the step summary. The exit code is the same, so the job still fails on a new host:
 
 ```yaml
@@ -334,6 +353,22 @@ Other things this tool does not observe:
 
 A Linux network-namespace mode that captures every connection regardless of proxy support is the planned answer to the first point of the list; see the roadmap.
 
+## Troubleshooting
+
+Real messages and what to do about them.
+
+**`mcp-egress: command not found` after `pipx install`.** Run `pipx ensurepath` and open a new shell.
+
+**`error: cannot start 'some-server': [Errno 2] No such file or directory: 'some-server'`.** The command after `--` is not on `PATH`. Use the full path, or `uvx` / `npx -y` with the package name.
+
+**`error: server failed during list: Connection closed`.** The server started and then exited, usually because of a missing environment variable or argument. Add `--server-stderr server.log` and read the log; run the same command by hand to see the error.
+
+**`mcp-egress: error: --check needs --baseline FILE`** and **`error: baseline egress.baseline.json does not exist`.** `--check` compares with a baseline, so record one first: the same command without `--check` writes it. Commit the file so CI can read it.
+
+**`error: baseline calls.json is UTF-16 text; save it as UTF-8`**, **`is not UTF-8 text (byte 22)`** or **`is nested too deeply to read`.** Baselines and calls files are UTF-8 JSON. PowerShell's `>` writes UTF-16; use `Out-File -Encoding utf8`. A UTF-8 byte order mark is fine. Before 0.3.0 these crashed with a traceback (deep nesting) or printed a decoder error without the file name (calls files).
+
+**`No proxied connections were seen` for a server that obviously calls an API.** The server's HTTP client ignores `HTTPS_PROXY`: raw sockets, a custom stack, or Node older than 24. See [The proxy-bypass warning and its limits](#the-proxy-bypass-warning-and-its-limits).
+
 ## Frequently asked questions
 
 **How do I find out which hosts an MCP server connects to?**
@@ -353,7 +388,6 @@ No. HTTPS goes through the proxy as a `CONNECT` tunnel, and the proxy copies byt
 - Linux network-namespace mode that captures every connection, proxy support or not.
 - Remote servers over Streamable HTTP, with the proxy variables applied to the client side as well.
 - Automatic calls for tools with no required arguments, so a baseline needs less hand-written input.
-- A composite GitHub Action wrapping the check.
 
 ## Contributing
 

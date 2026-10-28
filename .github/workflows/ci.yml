@@ -39,6 +39,51 @@ jobs:
           mcp-egress run --out /tmp/egress.json -- python tests/fixtures/proxied_server.py
           python -c "import json; d=json.load(open('/tmp/egress.json')); assert d['server']['name']=='proxied-fixture'"
 
+  quickstart:
+    name: README quick start on a fresh install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install into a new venv and run the quick start
+        run: scripts/e2e_quickstart.sh
+
+  action:
+    name: Run the composite action on the fixture server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install the fixture server's dependency and start a local web server
+        run: |
+          python -m pip install mcp
+          python -m http.server 39211 --bind 127.0.0.1 --directory "$RUNNER_TEMP" &
+          echo '[{"tool": "fetch", "arguments": {"url": "http://127.0.0.1:39211/"}}]' > "$RUNNER_TEMP/calls.json"
+          sleep 1
+      - id: egress
+        uses: ./action
+        with:
+          command: python tests/fixtures/proxied_server.py
+          calls: ${{ runner.temp }}/calls.json
+          baseline: ${{ runner.temp }}/egress.baseline.json
+          check: false
+          out: ${{ runner.temp }}/egress.json
+      - name: Show outputs
+        env:
+          OUT: ${{ steps.egress.outputs.out }}
+          NEW_HOSTS: ${{ steps.egress.outputs.new-hosts }}
+        run: |
+          echo "out=$OUT new-hosts=$NEW_HOSTS"
+          python -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['server']['name']=='proxied-fixture'; assert [h['port'] for h in d['hosts']]==[39211], d['hosts']" "$OUT"
+
   container-build:
     name: Build the container image and run it
     runs-on: ubuntu-latest

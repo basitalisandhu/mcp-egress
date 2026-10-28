@@ -65,7 +65,10 @@ def parse_connect_target(target: str) -> tuple[str, int]:
 
 def parse_absolute_target(target: str) -> tuple[str, int, str]:
     """Split an absolute-form request target into host, port and origin-form path."""
-    parts = urlsplit(target)
+    try:
+        parts = urlsplit(target)
+    except ValueError:  # an unclosed IPv6 bracket
+        raise ProxyError(f"bad request target {target!r}") from None
     if parts.scheme.lower() != "http" or not parts.hostname:
         raise ProxyError(f"unsupported request target {target!r}")
     try:

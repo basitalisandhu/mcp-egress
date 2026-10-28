@@ -6,9 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-28
+
 ### Added
 
+- A composite GitHub Action in `action/` (`uses: basitalisandhu/mcp-egress/action@v0.3.0`): inputs `command`, `calls`, `baseline`, `check`, `out`, `python-version`, `version`; outputs `out` and `new-hosts`; a new host still fails the step after the outputs are set. CI runs it against the fixture server. Closes #12.
+- README: Troubleshooting section with the real messages and their fixes.
+- `scripts/e2e_quickstart.sh` (`make e2e`) installs the checkout into a new virtual environment and runs the README quick start against the fixture server and a local web server: record, check, a new host, then `diff`. CI runs it.
+- Seeded fuzz tests over baselines, calls files and proxy request heads, with time limits.
 - `mcp-egress diff OLD.json NEW.json` compares saved documents offline, showing added/removed hosts with tool attribution and changed per-tool host lists; it reuses baseline comparison and never modifies either file (#9).
+
+### Fixed
+
+- A baseline or calls file nested tens of thousands of levels deep crashed with `RecursionError`; it is now an error naming the file (exit 2).
+- A calls file that was not UTF-8 printed only the decoder message, without the file name; baselines and calls files now say which file is UTF-16 or not UTF-8. A UTF-8 byte order mark is accepted.
+- An absolute-form proxy request with an unclosed IPv6 bracket (`http://[::1/x`) raised inside the proxy and the connection was dropped without an answer; it now gets a 400.
+
+### Changed
+
+- Host comparisons (`--check`, `diff`) use sets instead of list scans: 20,000 hosts took 2.94 s to compare and 3.32 s to diff, now 0.01 s and 0.04 s. A scaling test guards it.
 
 ## [0.2.0] - 2026-10-20
 

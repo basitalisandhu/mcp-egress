@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .jsonfile import JsonFileError, read_json
 from .recorder import host_key
 
 
@@ -15,11 +15,13 @@ class BaselineError(Exception):
 
 def load_baseline(path: Path) -> dict:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = read_json(path)
     except FileNotFoundError:
         raise BaselineError(f"baseline {path} does not exist") from None
-    except (OSError, ValueError) as exc:
-        raise BaselineError(f"cannot read baseline {path}: {exc}") from None
+    except JsonFileError as exc:
+        raise BaselineError(f"baseline {exc}") from None
+    except OSError as exc:
+        raise BaselineError(f"cannot read baseline {path}: {exc.strerror or exc}") from None
     if not isinstance(data, dict) or not isinstance(data.get("hosts"), list):
         raise BaselineError(f"baseline {path} has no 'hosts' list")
     try:
@@ -31,7 +33,9 @@ def load_baseline(path: Path) -> dict:
 
 def document_host_keys(doc: dict) -> list[str]:
     """Distinct `host:port` keys of a document, in order."""
-    keys: list[str] = []
+    # A dict keeps first-seen order with constant-time membership; a list made this
+    # quadratic in the number of hosts.
+    keys: dict[str, None] = {}
     for entry in doc.get("hosts", []):
         if not isinstance(entry, dict) or "host" not in entry or "port" not in entry:
             raise BaselineError("a hosts entry lacks host or port")
@@ -42,10 +46,8 @@ def document_host_keys(doc: dict) -> list[str]:
             port = int(port)
         except ValueError:
             raise BaselineError(f"a hosts entry has a bad port {port!r}") from None
-        key = host_key(str(entry["host"]).lower(), port)
-        if key not in keys:
-            keys.append(key)
-    return keys
+        keys.setdefault(host_key(str(entry["host"]).lower(), port), None)
+    return list(keys)
 
 
 @dataclass
@@ -71,10 +73,11 @@ def compare(current: dict, baseline: dict, baseline_name: str) -> Comparison:
     """Hosts in `current` that the baseline lacks, and the other way round."""
     now = document_host_keys(current)
     then = document_host_keys(baseline)
+    now_set, then_set = set(now), set(then)
     return Comparison(
         baseline=baseline_name,
-        new_hosts=[k for k in now if k not in then],
-        missing_hosts=[k for k in then if k not in now],
+        new_hosts=[k for k in now if k not in then_set],
+        missing_hosts=[k for k in then if k not in now_set],
     )
 
 
@@ -130,7 +133,7 @@ def diff_documents(old: dict, new: dict, baseline_name: str) -> DocumentDiff:
             changed[name] = change
 
     def attribution(keys: list[str], tools: dict[str, dict]) -> dict[str, list[str]]:
-        tool_keys = {name: document_host_keys(doc) for name, doc in tools.items()}
+        tool_keys = {name: set(document_host_keys(doc)) for name, doc in tools.items()}
         return {key: [name for name, hosts in tool_keys.items() if key in hosts] for key in keys}
 
     return DocumentDiff(
