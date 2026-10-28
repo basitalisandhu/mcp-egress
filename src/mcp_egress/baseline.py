@@ -93,6 +93,20 @@ class DocumentDiff:
     removed_hosts: dict[str, list[str]]
     changed_tools: dict[str, Comparison]
 
+    def to_dict(self) -> dict:
+        return {
+            "added_hosts": {host: list(tools) for host, tools in self.added_hosts.items()},
+            "removed_hosts": {host: list(tools) for host, tools in self.removed_hosts.items()},
+            "changed_tools": {
+                name: {
+                    "added": list(change.new_hosts),
+                    "removed": list(change.missing_hosts),
+                }
+                for name, change in self.changed_tools.items()
+            },
+            "ok": self.comparison.ok,
+        }
+
 
 def _tool_documents(doc: dict) -> dict[str, dict]:
     """Aggregate repeated tool names while normalising keys as compare() does."""
