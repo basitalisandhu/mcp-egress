@@ -105,6 +105,7 @@ pip install mcp-egress
 
 ```sh
 mcp-egress diff old-egress.json new-egress.json
+mcp-egress diff --format json old-egress.json new-egress.json
 ```
 
 `diff` runs no MCP server and changes neither file. It shows globally added and
@@ -112,6 +113,20 @@ removed `host:port` keys, the tools that reached each in the appropriate documen
 and tools whose host sets changed. Hosts without tool attribution are labelled
 explicitly. Host case, duplicate host rows and host-list ordering do not create
 changes; repeated tool names are aggregated.
+
+With `--format json` (default is `text`) the same content is printed as a JSON
+object so CI scripts can read it without parsing the text form:
+
+```json
+{
+  "added_hosts": {"new.example:443": ["fetch"]},
+  "removed_hosts": {"old.example:443": ["fetch"]},
+  "changed_tools": {
+    "fetch": {"added": ["new.example:443"], "removed": ["old.example:443"]}
+  },
+  "ok": false
+}
+```
 
 Exit codes are 1 when a globally new host appears, 0 otherwise (including removal-only
 or tool-only changes), and 2 for unreadable/malformed documents. Both files need a

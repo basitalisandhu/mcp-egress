@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -42,6 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     diff.add_argument("old", metavar="OLD.json")
     diff.add_argument("new", metavar="NEW.json")
+    diff.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format (default: text)",
+    )
     run = sub.add_parser(
         "run",
         help="spawn a stdio server, run initialize, tools/list and optional calls",
@@ -106,7 +113,10 @@ def main(argv: list[str] | None = None) -> int:
         except BaselineError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_USAGE
-        print(render_diff(result))
+        if ns.format == "json":
+            print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        else:
+            print(render_diff(result))
         return EXIT_OK if result.comparison.ok else EXIT_NEW_HOSTS
     options, command = split_command(args)
     ns = parser.parse_args(options)

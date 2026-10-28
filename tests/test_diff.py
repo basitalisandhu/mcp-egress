@@ -95,3 +95,28 @@ def test_missing_and_malformed_json_exit_two(tmp_path):
     assert main(["diff", valid, missing]) == 2
     Path(missing).write_text("{", encoding="utf-8")
     assert main(["diff", valid, missing]) == 2
+
+
+def test_diff_format_json_matches_text_content(tmp_path, capsys):
+    old = document(
+        [("old.test", 443)],
+        [{"name": "fetch", "hosts": ["old.test:443"]}],
+    )
+    new = document(
+        [("new.test", 443)],
+        [{"name": "fetch", "hosts": ["new.test:443"]}],
+    )
+    paths = files(tmp_path, old, new)
+    assert main(["diff", "--format", "json", *paths]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["added_hosts"] == {"new.test:443": ["fetch"]}
+    assert payload["removed_hosts"] == {"old.test:443": ["fetch"]}
+    assert payload["changed_tools"] == {
+        "fetch": {"added": ["new.test:443"], "removed": ["old.test:443"]}
+    }
+    # default remains text
+    assert main(["diff", *paths]) == 1
+    text = capsys.readouterr().out
+    assert "added hosts (1)" in text
+    assert "new.test:443" in text
