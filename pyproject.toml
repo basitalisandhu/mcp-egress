@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-egress"
-version = "0.3.0"
+version = "0.3.1"
 description = "Record every host an MCP server contacts, per tool, through an embedded CONNECT proxy, and fail CI when a new one appears."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -40,6 +40,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Security",
   "Topic :: System :: Networking :: Monitoring",
   "Topic :: Software Development :: Quality Assurance",
