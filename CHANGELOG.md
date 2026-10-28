@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-29
+
+### Added
+
+- `mcp-egress diff --format json OLD NEW` prints the added and removed hosts as a JSON object for CI scripts; text stays the default and exit codes are unchanged (#33, #34 by @HarshRajSinghania).
+
+### Fixed
+
+- A deeply nested baseline or calls file exits 2 with "is nested too deeply to read" on every supported Python. Python 3.14 no longer raises `RecursionError` from `json.loads` at the old depth (balanced input parsed, unclosed input was reported as invalid JSON), so JSON is now checked for nesting first (limit 200 levels).
+- CI tests Python 3.14.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added

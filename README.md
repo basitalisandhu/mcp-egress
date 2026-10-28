@@ -76,19 +76,19 @@ Once the package is on PyPI the short forms work too: `pipx install mcp-egress`,
 Each release tag publishes `ghcr.io/basitalisandhu/mcp-egress` for linux/amd64 and linux/arm64, tagged with the version and `latest`. The image runs as uid 1000 with `/work` as the working directory:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/mcp-egress:0.3.0 \
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/mcp-egress:0.3.1 \
   run --calls calls.json --baseline egress.baseline.json --check --out egress.json -- python server.py
 ```
 
-`mcp-egress run` starts the MCP server inside the container, so the server command has to work there. The image contains Python 3.12 and the `mcp` package and nothing else: a Python server in the mounted directory that needs only `mcp` and the standard library runs as is. Servers started with `npx`, `uvx` or another runtime need an image of your own that adds that runtime (`FROM ghcr.io/basitalisandhu/mcp-egress:0.3.0`), or a local install of mcp-egress. The baseline, `--check` and the `egress.json` document behave the same in the container; the mounted directory must be writable by uid 1000.
+`mcp-egress run` starts the MCP server inside the container, so the server command has to work there. The image contains Python 3.12 and the `mcp` package and nothing else: a Python server in the mounted directory that needs only `mcp` and the standard library runs as is. Servers started with `npx`, `uvx` or another runtime need an image of your own that adds that runtime (`FROM ghcr.io/basitalisandhu/mcp-egress:0.3.1`), or a local install of mcp-egress. The baseline, `--check` and the `egress.json` document behave the same in the container; the mounted directory must be writable by uid 1000.
 
 The image is signed with a keyless cosign signature and has a build provenance attestation and an SPDX SBOM (attached to the GitHub Release). To verify:
 
 ```bash
-cosign verify ghcr.io/basitalisandhu/mcp-egress:0.3.0 \
+cosign verify ghcr.io/basitalisandhu/mcp-egress:0.3.1 \
   --certificate-identity-regexp '^https://github.com/basitalisandhu/mcp-egress/\.github/workflows/publish-github-packages\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
-gh attestation verify oci://ghcr.io/basitalisandhu/mcp-egress:0.3.0 --repo basitalisandhu/mcp-egress
+gh attestation verify oci://ghcr.io/basitalisandhu/mcp-egress:0.3.1 --repo basitalisandhu/mcp-egress
 ```
 
 ### pip
@@ -322,7 +322,7 @@ Or use the composite action in this repository, which installs the tool, runs th
 ```yaml
       - uses: actions/checkout@v7
       - id: egress
-        uses: basitalisandhu/mcp-egress/action@v0.3.0
+        uses: basitalisandhu/mcp-egress/action@v0.3.1
         with:
           command: uvx some-mcp-server
           calls: calls.json

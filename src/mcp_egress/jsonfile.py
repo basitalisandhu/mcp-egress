@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
+
+from . import _jsondepth
 
 
 class JsonFileError(ValueError):
@@ -30,7 +31,7 @@ def read_json(path: str | Path) -> Any:
             f"{path} is not UTF-8 text (byte {exc.start}); save it as UTF-8"
         ) from None
     try:
-        return json.loads(text)
+        return _jsondepth.loads(text)
     except RecursionError:
         raise JsonFileError(f"{path} is nested too deeply to read") from None
     except ValueError as exc:
