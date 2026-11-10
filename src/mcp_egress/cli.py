@@ -76,7 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--report-out",
         metavar="FILE",
         help="write the rendered report (in the selected --format) to FILE, in addition to stdout; "
-        "the file is written even when --check exits 1, so a later workflow step can post it",
+        "the file is written even when --check exits 1, so a later workflow step can post it; "
+        "parent directories are not created and FILE may not be --out, --baseline, --calls "
+        "or --server-stderr",
     )
     run.add_argument(
         "--server-stderr",
@@ -85,6 +87,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("command", nargs=argparse.REMAINDER, help="the server command")
     return parser
+
+
+def report_out_conflict(ns: argparse.Namespace) -> str | None:
+    """Return an error message when --report-out collides with another output file.
+
+    Writing the report over egress.json, the baseline, the calls file or the
+    server stderr log would corrupt data the workflow needs, so the pair is
+    refused before the server even starts. Returns None when there is no
+    conflict or --report-out is absent.
+    """
+    if not ns.report_out:
+        return None
+    report = Path(ns.report_out)
+    out_path = Path(ns.out) if ns.out else Path(DEFAULT_OUT)
+    targets: list[tuple[str, Path]] = [("--out", out_path)]
+    if ns.baseline:
+        targets.append(("--baseline", Path(ns.baseline)))
+    if ns.calls:
+        targets.append(("--calls", Path(ns.calls)))
+    if ns.server_stderr:
+        targets.append(("--server-stderr", Path(ns.server_stderr)))
+    for flag, path in targets:
+        if report.resolve() == path.resolve():
+            return f"--report-out {ns.report_out} would overwrite {flag} {path}"
+    return None
 
 
 def split_command(argv: list[str]) -> tuple[list[str], list[str]]:
@@ -108,6 +135,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("no server command given; put it after `--`")
     if ns.check and not ns.baseline:
         parser.error("--check needs --baseline FILE")
+    conflict = report_out_conflict(ns)
+    if conflict:
+        print(f"error: {conflict}", file=sys.stderr)
+        return EXIT_USAGE
     return run_command(ns, command)
 
 
@@ -176,11 +207,16 @@ def run_command(ns: argparse.Namespace, command: list[str]) -> int:
 
     # --report-out: write the same rendered report to a file. Done before
     # the egress.json write so a later workflow step can post it even when
-    # --check fails (status == EXIT_NEW_HOSTS).
+    # --check fails (status == EXIT_NEW_HOSTS). Parent directories are not
+    # created: a missing parent surfaces as a clean exit 2 instead of a
+    # surprise directory tree.
     if ns.report_out:
         report_path = Path(ns.report_out)
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(report_text, encoding="utf-8")
+        try:
+            report_path.write_text(report_text, encoding="utf-8")
+        except OSError as exc:
+            print(f"error: cannot write --report-out {report_path}: {exc}", file=sys.stderr)
+            return EXIT_USAGE
         print(f"Wrote report to {report_path}", file=out)
 
     out_path = Path(ns.out) if ns.out else Path(DEFAULT_OUT)

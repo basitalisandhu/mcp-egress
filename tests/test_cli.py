@@ -322,9 +322,12 @@ def test_report_out_is_written_even_when_check_fails(
     assert http_server.key in file_text
 
 
-def test_report_out_creates_parent_directories(tmp_path, proxied_command, http_server, capsys):
+def test_report_out_write_error_exits_2_without_creating_directories(
+    tmp_path, proxied_command, http_server, capsys
+):
     out = tmp_path / "egress.json"
-    report_path = tmp_path / "reports" / "subdir" / "report.md"
+    missing_dir = tmp_path / "no-such-dir"
+    report_path = missing_dir / "report.md"
     code = _run(
         tmp_path,
         proxied_command,
@@ -332,15 +335,54 @@ def test_report_out_creates_parent_directories(tmp_path, proxied_command, http_s
         _calls_file(tmp_path, http_server.url),
         "--out",
         str(out),
-        "--format",
-        "markdown",
         "--report-out",
         str(report_path),
     )
-    assert code == EXIT_OK
-    assert report_path.exists()
-    captured = capsys.readouterr()
-    assert report_path.read_text(encoding="utf-8") == captured.out
+    # A missing parent is a clean exit 2, not a traceback and not a new tree.
+    assert code == EXIT_USAGE
+    err = capsys.readouterr().err
+    assert "cannot write --report-out" in err
+    assert not missing_dir.exists()
+    assert not report_path.exists()
+
+
+def test_report_out_refuses_out_collision_before_the_server_starts(tmp_path, capsys):
+    out = tmp_path / "egress.json"
+    marker = tmp_path / "started"
+    server = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    assert _run(tmp_path, server, "--out", str(out), "--report-out", str(out)) == EXIT_USAGE
+    assert "would overwrite --out" in capsys.readouterr().err
+    assert not marker.exists()
+
+
+def test_report_out_refuses_the_default_out_path(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    marker = tmp_path / "started"
+    server = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    report = tmp_path / "egress.json"
+    assert _run(tmp_path, server, "--report-out", str(report)) == EXIT_USAGE
+    assert "would overwrite --out" in capsys.readouterr().err
+    assert not marker.exists()
+
+
+def test_report_out_refuses_baseline_calls_and_log_collisions(tmp_path, capsys):
+    marker = tmp_path / "started"
+    server = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    baseline = tmp_path / "baseline.json"
+    calls = tmp_path / "calls.json"
+    log = tmp_path / "server.log"
+    assert (
+        _run(tmp_path, server, "--baseline", str(baseline), "--report-out", str(baseline))
+        == EXIT_USAGE
+    )
+    assert "would overwrite --baseline" in capsys.readouterr().err
+    assert (
+        _run(tmp_path, server, "--calls", str(calls), "--report-out", str(calls)) == EXIT_USAGE
+    )
+    assert "would overwrite --calls" in capsys.readouterr().err
+    assert _run(tmp_path, server, "--report-out", str(log)) == EXIT_USAGE
+    assert "would overwrite --server-stderr" in capsys.readouterr().err
+    assert not marker.exists()
 
 
 def test_help_lists_report_out_flag():
