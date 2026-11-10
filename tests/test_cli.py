@@ -223,3 +223,180 @@ def test_markdown_format_keeps_stdout_pure_markdown(tmp_path, proxied_command, h
     assert "### Baseline check" in captured.out
     assert "Wrote" not in captured.out and f"Wrote {out}" in captured.err
     assert json.loads(out.read_text())["check"]["ok"] is False
+
+
+def test_report_out_writes_text_report_equal_to_stdout(
+    tmp_path, proxied_command, http_server, capsys
+):
+    out = tmp_path / "egress.json"
+    report_path = tmp_path / "report.txt"
+    code = _run(
+        tmp_path,
+        proxied_command,
+        "--calls",
+        _calls_file(tmp_path, http_server.url),
+        "--out",
+        str(out),
+        "--report-out",
+        str(report_path),
+    )
+    assert code == EXIT_OK
+    captured = capsys.readouterr()
+    # The file content must contain the same report body that was printed on
+    # stdout. In text mode stdout also carries status lines ("Wrote ...") that
+    # are not part of the report, so we assert the report body is present
+    # verbatim and that the file ends with a trailing newline.
+    assert report_path.exists()
+    file_text = report_path.read_text(encoding="utf-8")
+    assert file_text.endswith("\n")
+    # The report body always starts with the per-host table header.
+    assert "server: proxied-fixture" in file_text
+    assert f"127.0.0.1  {http_server.port}" in file_text
+    assert '"WebFetch(domain:127.0.0.1)",' in file_text
+    assert "Sandbox allowed domains" in file_text
+    # Status lines do NOT belong in the report file.
+    assert "Wrote" not in file_text
+    # The same report body was also on stdout.
+    for line in file_text.rstrip("\n").split("\n"):
+        if line:
+            assert line in captured.out
+
+
+def test_report_out_writes_markdown_report_equal_to_stdout(
+    tmp_path, proxied_command, http_server, capsys
+):
+    out = tmp_path / "egress.json"
+    report_path = tmp_path / "report.md"
+    code = _run(
+        tmp_path,
+        proxied_command,
+        "--calls",
+        _calls_file(tmp_path, http_server.url + "/md"),
+        "--out",
+        str(out),
+        "--format",
+        "markdown",
+        "--report-out",
+        str(report_path),
+    )
+    assert code == EXIT_OK
+    captured = capsys.readouterr()
+    assert report_path.exists()
+    file_text = report_path.read_text(encoding="utf-8")
+    # Markdown stdout is pure markdown (status lines went to stderr).
+    assert file_text == captured.out
+    assert file_text.startswith("## mcp-egress report\n")
+
+
+def test_report_out_is_written_even_when_check_fails(
+    tmp_path, proxied_command, http_server, capsys
+):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps({"hosts": [{"host": "api.example", "port": 443}], "tools": []}))
+    out = tmp_path / "egress.json"
+    report_path = tmp_path / "report.md"
+    code = _run(
+        tmp_path,
+        proxied_command,
+        "--calls",
+        _calls_file(tmp_path, http_server.url + "/check-fail"),
+        "--out",
+        str(out),
+        "--baseline",
+        str(baseline),
+        "--check",
+        "--format",
+        "markdown",
+        "--report-out",
+        str(report_path),
+    )
+    # --check must exit 1 when new hosts appear...
+    assert code == EXIT_NEW_HOSTS
+    captured = capsys.readouterr()
+    # ...but the report file must still be written, including the baseline check section.
+    assert report_path.exists()
+    file_text = report_path.read_text(encoding="utf-8")
+    assert file_text == captured.out
+    assert "### Baseline check" in file_text
+    assert "1 new host(s)" in file_text
+    assert http_server.key in file_text
+
+
+def test_report_out_write_error_exits_2_without_creating_directories(
+    tmp_path, proxied_command, http_server, capsys
+):
+    out = tmp_path / "egress.json"
+    missing_dir = tmp_path / "no-such-dir"
+    report_path = missing_dir / "report.md"
+    code = _run(
+        tmp_path,
+        proxied_command,
+        "--calls",
+        _calls_file(tmp_path, http_server.url),
+        "--out",
+        str(out),
+        "--report-out",
+        str(report_path),
+    )
+    # A missing parent is a clean exit 2, not a traceback and not a new tree.
+    assert code == EXIT_USAGE
+    err = capsys.readouterr().err
+    assert "cannot write --report-out" in err
+    assert not missing_dir.exists()
+    assert not report_path.exists()
+
+
+def test_report_out_refuses_out_collision_before_the_server_starts(tmp_path, capsys):
+    out = tmp_path / "egress.json"
+    marker = tmp_path / "started"
+    server = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    assert _run(tmp_path, server, "--out", str(out), "--report-out", str(out)) == EXIT_USAGE
+    assert "would overwrite --out" in capsys.readouterr().err
+    assert not marker.exists()
+
+
+def test_report_out_refuses_the_default_out_path(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    marker = tmp_path / "started"
+    server = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    report = tmp_path / "egress.json"
+    assert _run(tmp_path, server, "--report-out", str(report)) == EXIT_USAGE
+    assert "would overwrite --out" in capsys.readouterr().err
+    assert not marker.exists()
+
+
+def test_report_out_refuses_baseline_calls_and_log_collisions(tmp_path, capsys):
+    marker = tmp_path / "started"
+    server = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    baseline = tmp_path / "baseline.json"
+    calls = tmp_path / "calls.json"
+    log = tmp_path / "server.log"
+    assert (
+        _run(tmp_path, server, "--baseline", str(baseline), "--report-out", str(baseline))
+        == EXIT_USAGE
+    )
+    assert "would overwrite --baseline" in capsys.readouterr().err
+    assert (
+        _run(tmp_path, server, "--calls", str(calls), "--report-out", str(calls)) == EXIT_USAGE
+    )
+    assert "would overwrite --calls" in capsys.readouterr().err
+    assert _run(tmp_path, server, "--report-out", str(log)) == EXIT_USAGE
+    assert "would overwrite --server-stderr" in capsys.readouterr().err
+    assert not marker.exists()
+
+
+def test_help_lists_report_out_flag():
+    from mcp_egress.cli import build_parser
+
+    parser = build_parser()
+    # Find the `run` subparser via the _SubParsersAction.
+    run_parser = None
+    for action in parser._actions:
+        if hasattr(action, "choices") and "run" in (action.choices or {}):
+            run_parser = action.choices["run"]
+            break
+    assert run_parser is not None
+    option_strings = []
+    for a in run_parser._actions:
+        option_strings.extend(a.option_strings)
+    assert "--report-out" in option_strings

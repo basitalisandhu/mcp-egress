@@ -85,12 +85,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="report format on stdout (default text); markdown suits a pull request comment",
     )
     run.add_argument(
+        "--report-out",
+        metavar="FILE",
+        help="write the rendered report (in the selected --format) to FILE, in addition to stdout; "
+        "the file is written even when --check exits 1, so a later workflow step can post it; "
+        "parent directories are not created and FILE may not be --out, --baseline, --calls "
+        "or --server-stderr",
+    )
+    run.add_argument(
         "--server-stderr",
         metavar="FILE",
         help="write the server's stderr to FILE instead of passing it through",
     )
     run.add_argument("command", nargs=argparse.REMAINDER, help="the server command")
     return parser
+
+
+def report_out_conflict(ns: argparse.Namespace) -> str | None:
+    """Return an error message when --report-out collides with another output file.
+
+    Writing the report over egress.json, the baseline, the calls file or the
+    server stderr log would corrupt data the workflow needs, so the pair is
+    refused before the server even starts. Returns None when there is no
+    conflict or --report-out is absent.
+    """
+    if not ns.report_out:
+        return None
+    report = Path(ns.report_out)
+    out_path = Path(ns.out) if ns.out else Path(DEFAULT_OUT)
+    targets: list[tuple[str, Path]] = [("--out", out_path)]
+    if ns.baseline:
+        targets.append(("--baseline", Path(ns.baseline)))
+    if ns.calls:
+        targets.append(("--calls", Path(ns.calls)))
+    if ns.server_stderr:
+        targets.append(("--server-stderr", Path(ns.server_stderr)))
+    for flag, path in targets:
+        if report.resolve() == path.resolve():
+            return f"--report-out {ns.report_out} would overwrite {flag} {path}"
+    return None
 
 
 def split_command(argv: list[str]) -> tuple[list[str], list[str]]:
@@ -128,6 +161,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("no server command given; put it after `--`")
     if ns.check and not ns.baseline:
         parser.error("--check needs --baseline FILE")
+    conflict = report_out_conflict(ns)
+    if conflict:
+        print(f"error: {conflict}", file=sys.stderr)
+        return EXIT_USAGE
     return run_command(ns, command)
 
 
@@ -164,9 +201,10 @@ def run_command(ns: argparse.Namespace, command: list[str]) -> int:
 
     doc = build_document(result, warnings_for(result))
     markdown = ns.format == "markdown"
-    if not markdown:
-        print(render_report(doc), file=out)
 
+    # Build the full report (text or markdown) as a single string so the
+    # same content can go to stdout AND to --report-out. The report body
+    # depends on the --check comparison, so compute that first.
     status = EXIT_OK
     comparison = None
     if baseline_doc is not None:
@@ -174,13 +212,38 @@ def run_command(ns: argparse.Namespace, command: list[str]) -> int:
         doc["check"] = comparison.to_dict()
         if not comparison.ok:
             status = EXIT_NEW_HOSTS
+
+    report_lines: list[str] = []
     if markdown:
-        print(render_report_markdown(doc), file=out)
-        # Keep stdout pure Markdown so it can be redirected into a comment body.
+        report_lines.append(render_report_markdown(doc))
+        # In markdown mode the report itself is meant for stdout (so it can be
+        # piped into a PR comment); the status lines below go to stderr.
         out = sys.stderr
-    elif comparison is not None:
-        print("", file=out)
-        print(render_check(doc, comparison), file=out)
+    else:
+        report_lines.append(render_report(doc))
+        if comparison is not None:
+            report_lines.append("")
+            report_lines.append(render_check(doc, comparison))
+    # render_report* helpers return their content without a trailing newline,
+    # but print() adds one. Mirror that on the file so the two outputs match
+    # byte-for-byte.
+    report_text = "\n".join(report_lines).rstrip("\n") + "\n"
+
+    sys.stdout.write(report_text)
+
+    # --report-out: write the same rendered report to a file. Done before
+    # the egress.json write so a later workflow step can post it even when
+    # --check fails (status == EXIT_NEW_HOSTS). Parent directories are not
+    # created: a missing parent surfaces as a clean exit 2 instead of a
+    # surprise directory tree.
+    if ns.report_out:
+        report_path = Path(ns.report_out)
+        try:
+            report_path.write_text(report_text, encoding="utf-8")
+        except OSError as exc:
+            print(f"error: cannot write --report-out {report_path}: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        print(f"Wrote report to {report_path}", file=out)
 
     out_path = Path(ns.out) if ns.out else Path(DEFAULT_OUT)
     skip_out = ns.out is None and ns.check and out_path.resolve() == Path(ns.baseline).resolve()
